@@ -175,13 +175,14 @@ int defs_link(int defs_token_idx, int find_def_tkidx){
 		&& *(TVals + defs_token_idx) == *(TVals + find_def_tkidx)
 		&& !memcmp(*(Tokens + defs_token_idx),
 			*(Tokens + find_def_tkidx), *(TVals + defs_token_idx))){
+		//Link to same identifier preceding 
 		*(TTypes + defs_token_idx) = *(TTypes + find_def_tkidx);
 		*(SymbolAddrs + defs_token_idx) = *(SymbolAddrs + find_def_tkidx);
 		return find_def_tkidx;
-	}
+	}//Backward search symbol the same identifier
 	return defs_link(defs_token_idx, find_def_tkidx - 1);
 }
-//Backward link function identifiers
+
 int defs_link_prototypes(int func_tk_idx, int func_identf_idx, int py_tk_idx){
 	if(py_tk_idx == 0){
 		return 0;
@@ -191,8 +192,9 @@ int defs_link_prototypes(int func_tk_idx, int func_identf_idx, int py_tk_idx){
 		&& *(TVals + func_tk_idx) == *(TVals + py_tk_idx)
 		&& !memcmp(*(Tokens + func_tk_idx),
 			*(Tokens + py_tk_idx), *(TVals + func_tk_idx))){
+		//Link same identifier preceding with current
 		*(SymbolAddrs + py_tk_idx) = func_identf_idx;
-	}
+	}//Backward link function identifiers
 	return defs_link_prototypes(func_tk_idx, func_identf_idx, py_tk_idx - 1);
 }
 int extern_defs_link(int ex_tk_idx, int ex_tk_num, int NumCparn, int NumParn,

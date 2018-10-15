@@ -1,0 +1,9 @@
+int argx = 10;
+int GlobalSymbol = 1;
+int GlobalSymbolNoInit;
+int f1(int argx, char *argy){
+return (argx+GlobalSymbol);
+}
+char *fu1(int *argy, char *argx){
+return (argx+GlobalSymbol);
+}
