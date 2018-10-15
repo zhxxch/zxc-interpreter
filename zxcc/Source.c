@@ -5,257 +5,258 @@ int MemSize;
 FILE *SrcFp;
 char *Src;
 int SrcLen;
-char** Tokens;
-char** TTypes;
-int* TVals;
+char** Symbols;
+char** STypes;
+int* SVals;
 int* SymbolAddrs;
-int NumTokens;
+int NumSymbols;
 int *Stack;
 int Top = 0, Frame = 0;
 char
-*TTYint = "int",
-*TTYchar = "char",
-*TTYif = "if",
-*TTYelse = "else",
-*TTYreturn = "return",
-*TTYprintf = "printf",
-*TTYmemcmp = "memcmp",
-*TTYmalloc = "malloc",
-*TTYmemchr = "memchr",
-*TTYfree = "free",
-*TTYfopen = "fopen",
-*TTYfread = "fread",
-*TTYfexit = "exit",
-*TTYfile = "FILE",
-*TTYdigit = "0123456789",
-*TTYid1st = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
-*TTYid = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
-*TTYop = "!&%*+-/<=>^|~",
-*TTYop2 = "=&|",
-*TTYpunct = "(){},;",
+*S_int = "int",
+*S_char = "char",
+*S_if = "if",
+*S_else = "else",
+*S_return = "return",
+*S_printf = "printf",
+*S_memcmp = "memcmp",
+*S_malloc = "malloc",
+*S_memchr = "memchr",
+*S_free = "free",
+*S_fopen = "fopen",
+*S_fread = "fread",
+*S_fexit = "exit",
+*S_file = "FILE",
+*S_digit = "0123456789",
+*S_id1st = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+*S_id = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+*S_op = "!&%*+-/<=>^|~",
+*S_op2 = "=&|",
+*S_punct = "(){},;",
 *Symbol32 = "_Var32",
 *Symbol8 = "_Var8",
-*Ptr32 = "_Ptr32",
-*Ptr8 = "_Ptr8",
+*SymbolPtr32 = "_Ptr32",
+*SymbolPtr8 = "_Ptr8",
 *SymbolFunc = "_Function";
 int CommaExp = 0, AssnExp = 1, LorExp = 2, LandExp = 3,
 BorExp = 4, BxorExp = 5, BandExp = 6, EqExp = 7, RelExp = 8,
 AddExp = 9, MulExp = 10, CastExp = 11, UnaryExp = 12, CallExp = 13, PrimExp = 14;
 int Ptr8Exp = 15, Ptr32Exp = 16, IntExp = 17, Int32Exp = 18, CharExp = 19;
 
-char* skip_line(char *src_skip_line){
-	if(*src_skip_line == '\n')return src_skip_line + 1;
-	return skip_line(src_skip_line + 1);
+char* skip_line(char *src){
+	if(*src == '\n')return src + 1;
+	return skip_line(src + 1);
 }
-char* atoint(char *src_a, int *val_int){
-	if(memchr(TTYdigit, *src_a, 10)){
-		*val_int = (*val_int) * 10 + *src_a - '0';
-		return atoint(src_a + 1, val_int);
-	} else return src_a;
+char* atoint(char *src, int *val){
+	if(memchr(S_digit, *src, 10)){
+		*val = (*val) * 10 + *src - '0';
+		return atoint(src + 1, val);
+	} else return src;
 }
-char* char_literal(char *src_ch, int *val_ch){
-	if(*(src_ch + 1) == '\\'){
-		if(*(src_ch + 2) == 'n')*val_ch = '\n';
-		if(*(src_ch + 2) == '\\')*val_ch = '\\';
-		if(*(src_ch + 2) == '\'')*val_ch = '\'';
-		return src_ch + 4;
+char* char_literal_scan(char *src, int *val){
+	if(*(src + 1) == '\\'){
+		if(*(src + 2) == 'n')*val = '\n';
+		if(*(src + 2) == '\\')*val = '\\';
+		if(*(src + 2) == '\'')*val = '\'';
+		return src + 4;
 	} else{
-		*val_ch = *(src_ch + 1);
-		return src_ch + 3;
+		*val = *(src + 1);
+		return src + 3;
 	}
 }
-char* string_literal(char *src_in, char *src_out){
+char* str_literal_scan(char *src_in, char *src_out){
 	if(*src_in == '\\'){
 		if(*(src_in + 1) == 'n'){
 			*src_out = '\n';
 		} else{
 			*src_out = *(src_in + 1);
 		}
-		return string_literal(src_in + 2, src_out + 1);
+		return str_literal_scan(src_in + 2, src_out + 1);
 	} else if(*src_in == '"'){
 		return src_in + 1;
 	} else{
 		*src_in = *src_out;
-		return string_literal(src_in + 1, src_out + 1);
+		return str_literal_scan(src_in + 1, src_out + 1);
 	}
 }
-char* identifier(char *src_id, int *id_len){
-	if(memchr(TTYid, *src_id, 64)){
-		*id_len = *id_len + 1;
-		return(identifier(src_id + 1, id_len));
+char* identifier_scan(char *src, int *len){
+	if(memchr(S_id, *src, 64)){
+		*len = *len + 1;
+		return(identifier_scan(src + 1, len));
 	}
-	return src_id;
+	return src;
 }
 
-int token_scan(char *src_tk, int tke_num){
-	*(Tokens + tke_num) = src_tk;
-	*(TTypes + tke_num) = 0;
-	*(TVals + tke_num) = 0;
-	if(!(*src_tk))return tke_num;
-	if(*src_tk == '#')return token_scan(skip_line(src_tk), tke_num);
-	else if(*src_tk == '/' && *(src_tk + 1) == '/'){
-		return token_scan(skip_line(src_tk), tke_num);
-	} else if(memchr(TTYdigit, *src_tk, 10)){
-		*(TTypes + tke_num) = TTYdigit;
-		return token_scan(atoint(src_tk, (TVals + tke_num)), tke_num + 1);
-	} else if(*src_tk == '\''){
-		*(TTypes + tke_num) = src_tk;
-		return token_scan(char_literal(src_tk, (TVals + tke_num)), tke_num + 1);
-	} else if(*src_tk == '"'){
-		*(TTypes + tke_num) = src_tk;
-		*(TVals + tke_num) = (int)(src_tk + 1);
-		return token_scan(string_literal(src_tk + 1, src_tk + 1), tke_num + 1);
-	} else if(memchr(TTYid1st, *src_tk, 54)){
-		*(TTypes + tke_num) = TTYid;
-		*(TVals + tke_num) = 0;
-		return token_scan(identifier(src_tk, (TVals + tke_num)), tke_num + 1);
-	} else if(memchr(TTYop, *src_tk, 14)){
-		if(memchr(TTYop2, *(src_tk + 1), 4)){
-			*(TTypes + tke_num) = TTYop2;
-			*(TVals + tke_num) = 2;
-			return token_scan(src_tk + 2, tke_num + 1);
+int SymbolsScan(char *src, int SymCtr){
+	*(Symbols + SymCtr) = src;
+	*(STypes + SymCtr) = 0;
+	*(SVals + SymCtr) = 0;
+	if(!(*src))return SymCtr;
+	if(*src == '#')return SymbolsScan(skip_line(src), SymCtr);
+	else if(*src == '/' && *(src + 1) == '/'){
+		return SymbolsScan(skip_line(src), SymCtr);
+	} else if(memchr(S_digit, *src, 10)){
+		*(STypes + SymCtr) = S_digit;
+		return SymbolsScan(atoint(src, (SVals + SymCtr)), SymCtr + 1);
+	} else if(*src == '\''){
+		*(STypes + SymCtr) = src;
+		return SymbolsScan(char_literal_scan(src, (SVals + SymCtr)), SymCtr + 1);
+	} else if(*src == '"'){
+		*(STypes + SymCtr) = src;
+		*(SVals + SymCtr) = (int)(src + 1);
+		return SymbolsScan(str_literal_scan(src + 1, src + 1), SymCtr + 1);
+	} else if(memchr(S_id1st, *src, 54)){
+		*(STypes + SymCtr) = S_id;
+		*(SVals + SymCtr) = 0;
+		return SymbolsScan(identifier_scan(src, (SVals + SymCtr)), SymCtr + 1);
+	} else if(memchr(S_op, *src, 14)){
+		if(memchr(S_op2, *(src + 1), 4)){
+			*(STypes + SymCtr) = S_op2;
+			*(SVals + SymCtr) = 2;
+			return SymbolsScan(src + 2, SymCtr + 1);
 		}
-		*(TTypes + tke_num) = TTYop;
-		*(TVals + tke_num) = 1;
-		return token_scan(src_tk + 1, tke_num + 1);
-	} else if(memchr(TTYpunct, *src_tk, 9)){
-		*(TTypes + tke_num) = TTYpunct;
-		*(TVals + tke_num) = 1;
-		return token_scan(src_tk + 1, tke_num + 1);
+		*(STypes + SymCtr) = S_op;
+		*(SVals + SymCtr) = 1;
+		return SymbolsScan(src + 1, SymCtr + 1);
+	} else if(memchr(S_punct, *src, 9)){
+		*(STypes + SymCtr) = S_punct;
+		*(SVals + SymCtr) = 1;
+		return SymbolsScan(src + 1, SymCtr + 1);
 	} else{
-		return token_scan(src_tk + 1, tke_num);
+		return SymbolsScan(src + 1, SymCtr);
 	}
 }
-char* keywords_type(char* keyword_tk, int kw_len){
-	if(!memcmp(TTYint, keyword_tk, kw_len) && kw_len == 3){
-		return TTYint;
-	} else if(!memcmp(TTYchar, keyword_tk, kw_len) && kw_len == 4){
-		return TTYchar;
-	} else if(!memcmp(TTYif, keyword_tk, kw_len) && kw_len == 2){
-		return TTYif;
-	} else if(!memcmp(TTYelse, keyword_tk, kw_len) && kw_len == 4){
-		return TTYelse;
-	} else if(!memcmp(TTYreturn, keyword_tk, kw_len) && kw_len == 6){
-		return TTYreturn;
-	} else if(!memcmp(TTYmemcmp, keyword_tk, kw_len) && kw_len == 6){
-		return TTYmemcmp;
-	} else if(!memcmp(TTYmalloc, keyword_tk, kw_len) && kw_len == 6){
-		return TTYmalloc;
-	} else if(!memcmp(TTYmemchr, keyword_tk, kw_len) && kw_len == 6){
-		return TTYmemchr;
-	} else if(!memcmp(TTYfree, keyword_tk, kw_len) && kw_len == 4){
-		return TTYfree;
-	} else if(!memcmp(TTYfopen, keyword_tk, kw_len) && kw_len == 5){
-		return TTYfopen;
-	} else if(!memcmp(TTYfread, keyword_tk, kw_len) && kw_len == 5){
-		return TTYfread;
-	} else if(!memcmp(TTYfile, keyword_tk, kw_len) && kw_len == 4){
-		return TTYfile;
-	} else return TTYid;
+char* keywords_type(char* kw_ptr, int kw_len){
+	if(!memcmp(S_int, kw_ptr, kw_len) && kw_len == 3){
+		return S_int;
+	} else if(!memcmp(S_char, kw_ptr, kw_len) && kw_len == 4){
+		return S_char;
+	} else if(!memcmp(S_if, kw_ptr, kw_len) && kw_len == 2){
+		return S_if;
+	} else if(!memcmp(S_else, kw_ptr, kw_len) && kw_len == 4){
+		return S_else;
+	} else if(!memcmp(S_return, kw_ptr, kw_len) && kw_len == 6){
+		return S_return;
+	} else if(!memcmp(S_memcmp, kw_ptr, kw_len) && kw_len == 6){
+		return S_memcmp;
+	} else if(!memcmp(S_malloc, kw_ptr, kw_len) && kw_len == 6){
+		return S_malloc;
+	} else if(!memcmp(S_memchr, kw_ptr, kw_len) && kw_len == 6){
+		return S_memchr;
+	} else if(!memcmp(S_free, kw_ptr, kw_len) && kw_len == 4){
+		return S_free;
+	} else if(!memcmp(S_fopen, kw_ptr, kw_len) && kw_len == 5){
+		return S_fopen;
+	} else if(!memcmp(S_fread, kw_ptr, kw_len) && kw_len == 5){
+		return S_fread;
+	} else if(!memcmp(S_file, kw_ptr, kw_len) && kw_len == 4){
+		return S_file;
+	} else return S_id;
 }
 int keywords_scan(int kw_scan_i){
 	if(kw_scan_i < 0)return 0;
-	if(*(TTypes + kw_scan_i) == TTYid){
-		*(TTypes + kw_scan_i) = keywords_type(*(Tokens + kw_scan_i), *(TVals + kw_scan_i));
+	if(*(STypes + kw_scan_i) == S_id){
+		*(STypes + kw_scan_i) = keywords_type(*(Symbols + kw_scan_i), *(SVals + kw_scan_i));
 	}
 	return keywords_scan(kw_scan_i - 1);
 }
 
-int print_tokens(int p_token_i, int num_token_print){
-	if(p_token_i == num_token_print)return 0;
-	printf("%c\t%c%c\t%i\t%i\t%i\n", **(Tokens + p_token_i), **(TTypes + p_token_i), *(*(TTypes + p_token_i) + 1),
-		*(TVals + p_token_i), *(SymbolAddrs + p_token_i), *(Stack + *(SymbolAddrs + p_token_i)));
-	return print_tokens(p_token_i + 1, num_token_print);
+int print_symbols(int symbol_id_iter, int num_symbols){
+	if(symbol_id_iter == num_symbols)return 0;
+	printf("%c\t%c%c\t%i\t%i\t%i\n", **(Symbols + symbol_id_iter), **(STypes + symbol_id_iter), *(*(STypes + symbol_id_iter) + 1),
+		*(SVals + symbol_id_iter), *(SymbolAddrs + symbol_id_iter), *(Stack + *(SymbolAddrs + symbol_id_iter)));
+	return print_symbols(symbol_id_iter + 1, num_symbols);
 }
 //Forward link identifiers
-int defs_link(int defs_token_idx, int find_def_tkidx){
-	if(find_def_tkidx == 0){
+int object_link(int sym_meet_idx, int sym_pre_iter){
+	if(sym_pre_iter == 0){
 		return 0;
-	} else if(**(TTypes + find_def_tkidx) == '_'
-		&& *(TVals + defs_token_idx) == *(TVals + find_def_tkidx)
-		&& !memcmp(*(Tokens + defs_token_idx),
-			*(Tokens + find_def_tkidx), *(TVals + defs_token_idx))){
+	} else if(**(STypes + sym_pre_iter) == '_'
+		&& *(SVals + sym_meet_idx) == *(SVals + sym_pre_iter)
+		&& !memcmp(*(Symbols + sym_meet_idx),
+			*(Symbols + sym_pre_iter), *(SVals + sym_meet_idx))){
 		//Link to same identifier preceding 
-		*(TTypes + defs_token_idx) = *(TTypes + find_def_tkidx);
-		*(SymbolAddrs + defs_token_idx) = *(SymbolAddrs + find_def_tkidx);
-		return find_def_tkidx;
+		*(STypes + sym_meet_idx) = *(STypes + sym_pre_iter);
+		*(SymbolAddrs + sym_meet_idx) = *(SymbolAddrs + sym_pre_iter);
+		return sym_pre_iter;
 	}//Backward search symbol the same identifier
-	return defs_link(defs_token_idx, find_def_tkidx - 1);
+	return object_link(sym_meet_idx, sym_pre_iter - 1);
 }
 
-int defs_link_prototypes(int func_tk_idx, int func_identf_idx, int py_tk_idx){
-	if(py_tk_idx == 0){
+int func_link(int fsym_idx, int fentrance_idx, int sym_pre_iter){
+	if(sym_pre_iter == 0){
 		return 0;
-	} else if(func_tk_idx<0 && *(SymbolAddrs+py_tk_idx)==func_identf_idx){
-		func_tk_idx = py_tk_idx;
-	} else if(*(TTypes + py_tk_idx) == SymbolFunc
-		&& *(TVals + func_tk_idx) == *(TVals + py_tk_idx)
-		&& !memcmp(*(Tokens + func_tk_idx),
-			*(Tokens + py_tk_idx), *(TVals + func_tk_idx))){
+	} else if(fsym_idx<0 && *(SymbolAddrs+sym_pre_iter)==fentrance_idx){
+		fsym_idx = sym_pre_iter;
+	} else if(*(STypes + sym_pre_iter) == SymbolFunc
+		&& *(SVals + fsym_idx) == *(SVals + sym_pre_iter)
+		&& !memcmp(*(Symbols + fsym_idx),
+			*(Symbols + sym_pre_iter), *(SVals + fsym_idx))){
 		//Link same identifier preceding with current
-		*(SymbolAddrs + py_tk_idx) = func_identf_idx;
+		*(SymbolAddrs + sym_pre_iter) = fentrance_idx;
 	}//Backward link function identifiers
-	return defs_link_prototypes(func_tk_idx, func_identf_idx, py_tk_idx - 1);
+	return func_link(fsym_idx, fentrance_idx, sym_pre_iter - 1);
 }
-int extern_defs_link(int ex_tk_idx, int ex_tk_num, int NumCparn, int NumParn,
-	char* CurrentDefType, int ex_identf_idx, int FparamIdx){
-	*(SymbolAddrs + ex_tk_idx) = 0;
-	if(ex_tk_num == 0){
+int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
+	int ParenCtr, char* MetObjType, int ObjCtr, int FuncArgCtr){
+	*(SymbolAddrs + sym_post_iter) = 0;
+	if(sym_counter == 0){
 		return 0;
-	} else if(**(Tokens + ex_tk_idx) == '{'){
-		if(NumCparn == 0 && **(Tokens + ex_tk_idx - 1) == ')'){
-			*(Stack + ex_identf_idx) = ex_tk_idx;
-			defs_link_prototypes(-1, ex_identf_idx, ex_tk_idx - 1);
+	} else if(**(Symbols + sym_post_iter) == '{'){
+		if(CurlyCtr == 0 && **(Symbols + sym_post_iter - 1) == ')'){
+			*(Stack + ObjCtr) = sym_post_iter;
+			func_link(-1, ObjCtr, sym_post_iter - 1);
 		}
-		return extern_defs_link(ex_tk_idx + 1, ex_tk_num - 1,
-			NumCparn + 1, NumParn, CurrentDefType, ex_identf_idx, FparamIdx);
-	} else if(**(Tokens + ex_tk_idx) == '}'){
+		return extern_defs_link(sym_post_iter + 1, sym_counter - 1,
+			CurlyCtr + 1, ParenCtr, MetObjType, ObjCtr, FuncArgCtr);
+	} else if(**(Symbols + sym_post_iter) == '}'){
 		//XXX: NumCparn = NumCparn - 1;
-		return extern_defs_link(ex_tk_idx + 1, ex_tk_num - 1,
-			NumCparn - 1, NumParn, CurrentDefType, ex_identf_idx, FparamIdx);
-	} else if(**(Tokens + ex_tk_idx) == '('){
-		return extern_defs_link(ex_tk_idx + 1, ex_tk_num - 1,
-			NumCparn, NumParn + 1, CurrentDefType, ex_identf_idx, FparamIdx);
-	} else if(**(Tokens + ex_tk_idx) == ')'){
-		return extern_defs_link(ex_tk_idx + 1, ex_tk_num - 1,
-			NumCparn, NumParn - 1, CurrentDefType, ex_identf_idx, FparamIdx);
-	} else if(*(TTypes + ex_tk_idx) == TTYint){
-		CurrentDefType = Symbol32;
-		return extern_defs_link(ex_tk_idx + 1, ex_tk_num - 1,
-			NumCparn, NumParn, CurrentDefType, ex_identf_idx, FparamIdx);
-	} else if(*(TTypes + ex_tk_idx) == TTYchar){
-		CurrentDefType = Symbol8;
-		return extern_defs_link(ex_tk_idx + 1, ex_tk_num - 1,
-			NumCparn, NumParn, CurrentDefType, ex_identf_idx, FparamIdx);
-	} else if(**(Tokens + ex_tk_idx) == '*'){
-		if(CurrentDefType == Symbol8){
-			CurrentDefType = Ptr8;
+		return extern_defs_link(sym_post_iter + 1, sym_counter - 1,
+			CurlyCtr - 1, ParenCtr, MetObjType, ObjCtr, FuncArgCtr);
+	} else if(**(Symbols + sym_post_iter) == '('){
+		return extern_defs_link(sym_post_iter + 1, sym_counter - 1,
+			CurlyCtr, ParenCtr + 1, MetObjType, ObjCtr, FuncArgCtr);
+	} else if(**(Symbols + sym_post_iter) == ')'){
+		return extern_defs_link(sym_post_iter + 1, sym_counter - 1,
+			CurlyCtr, ParenCtr - 1, MetObjType, ObjCtr, FuncArgCtr);
+	} else if(*(STypes + sym_post_iter) == S_int){
+		MetObjType = Symbol32;
+		return extern_defs_link(sym_post_iter + 1, sym_counter - 1,
+			CurlyCtr, ParenCtr, MetObjType, ObjCtr, FuncArgCtr);
+	} else if(*(STypes + sym_post_iter) == S_char){
+		MetObjType = Symbol8;
+		return extern_defs_link(sym_post_iter + 1, sym_counter - 1,
+			CurlyCtr, ParenCtr, MetObjType, ObjCtr, FuncArgCtr);
+	} else if(**(Symbols + sym_post_iter) == '*'){
+		if(MetObjType == Symbol8){
+			MetObjType = SymbolPtr8;
 		} else{
-			CurrentDefType = Ptr32;
+			MetObjType = SymbolPtr32;
 		}
-		return extern_defs_link(ex_tk_idx + 1, ex_tk_num - 1, NumCparn, NumParn, CurrentDefType, ex_identf_idx, FparamIdx);
-	} else if(*(TTypes + ex_tk_idx) == TTYid){
-		if(NumParn == 0 && NumCparn == 0){
-			FparamIdx = 0;
-			ex_identf_idx = ex_identf_idx + 1;
-			*(SymbolAddrs + ex_tk_idx) = ex_identf_idx;
-			*(TTypes + ex_tk_idx) = CurrentDefType;
-			if(**(Tokens + ex_tk_idx + 1) == '='){
-				*(Stack + ex_identf_idx) = *(TVals + ex_tk_idx + 2);
-			} else if(**(Tokens + ex_tk_idx + 1) == '('){
-				*(TTypes + ex_tk_idx) = SymbolFunc;
-				*(Stack + ex_identf_idx) = -1;
+		return extern_defs_link(sym_post_iter + 1, sym_counter - 1,
+			CurlyCtr, ParenCtr, MetObjType, ObjCtr, FuncArgCtr);
+	} else if(*(STypes + sym_post_iter) == S_id){
+		if(ParenCtr == 0 && CurlyCtr == 0){
+			FuncArgCtr = 0;
+			ObjCtr = ObjCtr + 1;
+			*(SymbolAddrs + sym_post_iter) = ObjCtr;
+			*(STypes + sym_post_iter) = MetObjType;
+			if(**(Symbols + sym_post_iter + 1) == '='){
+				*(Stack + ObjCtr) = *(SVals + sym_post_iter + 2);
+			} else if(**(Symbols + sym_post_iter + 1) == '('){
+				*(STypes + sym_post_iter) = SymbolFunc;
+				*(Stack + ObjCtr) = -1;
 			}
-		} else if(NumParn == 1 && NumCparn == 0){
-			FparamIdx = FparamIdx - 1;
-			*(SymbolAddrs + ex_tk_idx) = FparamIdx;
-			*(TTypes + ex_tk_idx) = CurrentDefType;
+		} else if(ParenCtr == 1 && CurlyCtr == 0){
+			FuncArgCtr = FuncArgCtr - 1;
+			*(SymbolAddrs + sym_post_iter) = FuncArgCtr;
+			*(STypes + sym_post_iter) = MetObjType;
 		} else{
-			defs_link(ex_tk_idx, ex_tk_idx - 1);
+			object_link(sym_post_iter, sym_post_iter - 1);
 		}
 	} else{
 	}
-	return extern_defs_link(ex_tk_idx + 1, ex_tk_num - 1, NumCparn, NumParn, CurrentDefType, ex_identf_idx, FparamIdx);
+	return extern_defs_link(sym_post_iter + 1, sym_counter - 1, CurlyCtr, ParenCtr, MetObjType, ObjCtr, FuncArgCtr);
 }
 
 int main(int argc, char** argv){
@@ -266,14 +267,14 @@ int main(int argc, char** argv){
 	SrcLen = fread(Src, 1, MemSize, SrcFp);
 	*(Src + SrcLen) = 0;
 	//All Tokens
-	Tokens = malloc(MemSize);
+	Symbols = malloc(MemSize);
 	//Token Type
-	TTypes = malloc(MemSize);
+	STypes = malloc(MemSize);
 	//Token values: numeric for int/char, ptr for "", length for ID
-	TVals = malloc(MemSize);
+	SVals = malloc(MemSize);
 	//Identifier address relative to Stack
 	SymbolAddrs = malloc(MemSize);
-	NumTokens = token_scan(Src, 0);
+	NumSymbols = SymbolsScan(Src, 0);
 	Stack = malloc(MemSize);
 	Top = 0;
 	Frame = 0;
@@ -282,8 +283,8 @@ int main(int argc, char** argv){
 	*(Stack + Top) = (int)(argv + 2);
 	Top = Top + 1;
 	// Mark keywords in TTypes
-	keywords_scan(NumTokens);
+	keywords_scan(NumSymbols);
 	//Mark function entrance in Stack[SymbolAddrs], or variable offset in SymbolAddrs
-	extern_defs_link(0, NumTokens, 0, 0, 0, Top, 0);
-	return print_tokens(0, NumTokens);
+	extern_defs_link(0, NumSymbols, 0, 0, 0, Top, 0);
+	return print_symbols(0, NumSymbols);
 }
