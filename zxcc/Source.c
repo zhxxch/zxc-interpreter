@@ -258,6 +258,62 @@ int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
 	}
 	return extern_defs_link(sym_post_iter + 1, sym_counter - 1, CurlyCtr, ParenCtr, MetObjType, ObjCtr, FuncArgCtr);
 }
+int main_entrance(int sym_pre_iter){
+	if(sym_pre_iter == 0){
+		return 0;
+	} else if(*(STypes + sym_pre_iter) == SymbolFunc
+		&& *(SVals + sym_pre_iter) == 4
+		&& !memcmp(*(Symbols + sym_pre_iter), "main", 4)){
+		return sym_pre_iter;
+	}
+	return main_entrance(sym_pre_iter - 1);
+}
+int expr(int *sym_iter, int A, char **expr_type);
+int prim_expr(int *sym_iter, int A, char **expr_type){
+	if(*(STypes + *sym_iter) == S_char || *(STypes + *sym_iter) == S_digit){
+		//constant
+		A= *(SVals + *sym_iter);
+		*expr_type = Symbol32;
+	} else if(*(*(STypes + *sym_iter)) == '_'){
+		//identifier
+		if(*(SymbolAddrs + *sym_iter) < 0){
+			//Function args
+			A= *(Stack + Top + *(SymbolAddrs + *sym_iter));
+		} else{
+			//Globals
+			A= *(Stack + *(SymbolAddrs + *sym_iter));
+		}
+		*expr_type = *(STypes + *sym_iter);
+	} else if(*(*(STypes + *sym_iter)) == '"'){
+		//string-literal
+		A= (int)*(Symbols + *sym_iter);
+		*expr_type = SymbolPtr8;
+	} else if(*(*(Symbols + *sym_iter)) == '('){
+		//(expression)
+		*sym_iter = *sym_iter + 1;
+		A = expr(sym_iter, 0, expr_type);
+		if(*(*(Symbols + *sym_iter)) == ')'){
+			*sym_iter = *sym_iter + 1;
+		} else{
+			//rparen expected
+			*expr_type = 0;
+		}
+	} else{
+		*expr_type = 0;
+	}
+	return A;
+}
+int assign_expr(int *sym_iter, int A, char **expr_type);
+int postfix_expression(int *sym_iter, int A, char **expr_type){
+	//function calls
+	A = prim_expr(sym_iter, A, expr_type);
+}
+int assign_expr(int *sym_iter, int A, char **expr_type){
+	return A;
+}
+int expr(int *sym_iter, int A, char **expr_type){
+	return A;
+}
 
 int main(int argc, char** argv){
 	if(argc < 2)return(9);
