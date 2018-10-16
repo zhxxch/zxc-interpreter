@@ -327,26 +327,75 @@ int argument_expr_list(int *sym_iter, char **expr_type, int A, int num_args){
 		return argument_expr_list(sym_iter, expr_type, A, num_args + 1);
 	} else return num_args;
 }
-int compound_statement(int *sym_iter, char **expr_type, int A){
-	if(*(STypes + *sym_iter) == S_return){
+int jump_statement(int *sym_iter, char **expr_type, int A){
+	A = expr(sym_iter, expr_type, 0);
+	if(**(Symbols + *sym_iter) == ';'){
 		*sym_iter = *sym_iter + 1;
-		A = expr(sym_iter, expr_type, 0);
-		if(**(Symbols + *sym_iter) == ';'){
-			*sym_iter = *sym_iter + 1;
-			return expr(sym_iter, expr_type, A);
-		} else{
+	} else{
 
-			//semi-c expected
-		}
+		//error: semi-c expected
+	}
+	return A;
+}
+int compound_statement(int *sym_iter, char **expr_type, int A){
+	//TODO: not correct, consult 6.8
+	if(**(Symbols + *sym_iter) == '}'){
+		return 0;
+	} else if(*(STypes + *sym_iter) == S_return){
+		*sym_iter = *sym_iter + 1;
+		return jump_statement(sym_iter, expr_type, A);
 
 	} else{
 		//error
 	}
 	return 0;
 }
+int statement(int *sym_iter, char **expr_type, int A){
+	//TODO: expr-statement, selection-statement
+	if(*(STypes + *sym_iter) == S_return){
+		//jump-statement
+		*sym_iter = *sym_iter + 1;
+		A = expr(sym_iter, expr_type, 0);
+		if(**(Symbols + *sym_iter) == ';'){
+			*sym_iter = *sym_iter + 1;
+		} else{
+			//error: semi-c expected
+		}
+	} else if(**(Symbols + *sym_iter) == '{'){
+		*sym_iter = *sym_iter + 1;
+		A = compound_statement(sym_iter, expr_type, A);
+		if(**(Symbols + *sym_iter) == '}'){
+			*sym_iter = *sym_iter + 1;
+		} else{
+			//error
+		}
+	} else if(*(STypes + *sym_iter) == S_if){
+		*sym_iter = *sym_iter + 1;
+		if(**(Symbols + *sym_iter) == '('){
+			*sym_iter = *sym_iter + 1;
+			A = expr(sym_iter, expr_type, 0);
+		} else{
+			//error
+		}
+		if(**(Symbols + *sym_iter) == ')'){
+			*sym_iter = *sym_iter + 1;
+		} else{
+			//error
+		}
+		//TODO: for if
+		if(A){
+
+		}else if(*(STypes + *sym_iter) == S_else){
+			//TODO
+		}
+	} else {
+		//TODO: for expressions
+	}
+	return A;
+}
 int call_func(int *sym_iter, char **expr_type,
 	int A_func_addr, int num_args, int ret_addr, char *ret_type){
-	*sym_iter = A_func_addr;
+	*sym_iter = A_func_addr + 1;
 	A_func_addr = compound_statement(sym_iter, expr_type, ret_addr);
 	*sym_iter = ret_addr;
 	*expr_type = ret_type;
@@ -438,7 +487,7 @@ int unary_cast_expr(int *sym_iter, char **expr_type, int A, int is_assign){
 				A = *(int*)A;
 				*expr_type = Symbol32;
 			}
-		} else if(*expr_type!=0){
+		} else if(*expr_type != 0){
 			if(is_assign){
 				*expr_type = Lval8addr;
 			} else{
@@ -463,8 +512,8 @@ int expr(int *sym_iter, char **expr_type, int A){
 
 int main(int argc, char** argv){
 	if(argc < 2)return(9);
-	StackSize = 1024*1024*1;
-	SymbolsMemSz = 1024*1024;
+	StackSize = 1024 * 1024 * 1;
+	SymbolsMemSz = 1024 * 1024;
 	SrcFp = fopen(*(argv + 1), "r");
 	Src = malloc(StackSize);
 	SrcLen = fread(Src, 1, StackSize, SrcFp);
