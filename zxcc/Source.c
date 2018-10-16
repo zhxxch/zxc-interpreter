@@ -33,11 +33,11 @@ char
 *S_op = "!&%*+-/<=>^|~",
 *S_op2 = "=&|",
 *S_punct = "(){},;",
-*Symbol32 = "_Var32",
-*Symbol8 = "_Var8",
-*SymbolPtr32 = "_Ptr32",
-*SymbolPtr8 = "_Ptr8",
-*SymbolFunc = "_Function";
+*Symbol32 = "_VF32",
+*Symbol8 = "_VF8",
+*SymbolPtr32 = "_PF32",
+*SymbolPtr8 = "_PF8";
+int SymFunc = 2;
 int CommaExp = 0, AssnExp = 1, LorExp = 2, LandExp = 3,
 BorExp = 4, BxorExp = 5, BandExp = 6, EqExp = 7, RelExp = 8,
 AddExp = 9, MulExp = 10, CastExp = 11, UnaryExp = 12, CallExp = 13, PrimExp = 14;
@@ -171,7 +171,7 @@ int print_symbols(int symbol_id_iter, int num_symbols){
 int object_link(int sym_meet_idx, int sym_pre_iter){
 	if(sym_pre_iter == 0){
 		return 0;
-	} else if(**(STypes + sym_pre_iter) == '_'
+	} else if(*(*(STypes + sym_pre_iter)+9) == '_'
 		&& *(SVals + sym_meet_idx) == *(SVals + sym_pre_iter)
 		&& !memcmp(*(Symbols + sym_meet_idx),
 			*(Symbols + sym_pre_iter), *(SVals + sym_meet_idx))){
@@ -188,7 +188,7 @@ int func_link(int fsym_idx, int fentrance_idx, int sym_pre_iter){
 		return 0;
 	} else if(fsym_idx<0 && *(SymbolAddrs+sym_pre_iter)==fentrance_idx){
 		fsym_idx = sym_pre_iter;
-	} else if(*(STypes + sym_pre_iter) == SymbolFunc
+	} else if(*(*(STypes + sym_pre_iter)+SymFunc) == 'F'
 		&& *(SVals + fsym_idx) == *(SVals + sym_pre_iter)
 		&& !memcmp(*(Symbols + fsym_idx),
 			*(Symbols + sym_pre_iter), *(SVals + fsym_idx))){
@@ -244,7 +244,7 @@ int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
 			if(**(Symbols + sym_post_iter + 1) == '='){
 				*(Stack + ObjCtr) = *(SVals + sym_post_iter + 2);
 			} else if(**(Symbols + sym_post_iter + 1) == '('){
-				*(STypes + sym_post_iter) = SymbolFunc;
+				*(STypes + sym_post_iter) = MetObjType+SymFunc;
 				*(Stack + ObjCtr) = -1;
 			}
 		} else if(ParenCtr == 1 && CurlyCtr == 0){
@@ -261,7 +261,7 @@ int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
 int main_entrance(int sym_pre_iter){
 	if(sym_pre_iter == 0){
 		return 0;
-	} else if(*(STypes + sym_pre_iter) == SymbolFunc
+	} else if(*(*(STypes + sym_pre_iter)+SymFunc) == 'F'
 		&& *(SVals + sym_pre_iter) == 4
 		&& !memcmp(*(Symbols + sym_pre_iter), "main", 4)){
 		return sym_pre_iter;
