@@ -33,10 +33,10 @@ char
 *S_op = "!&%*+-/<=>^|~",
 *S_op2 = "=&|",
 *S_punct = "(){},;",
-*Symbol32 = "_VF32",
-*Symbol8 = "_VF8",
-*SymbolPtr32 = "_PF32",
-*SymbolPtr8 = "_PF8";
+*Symbol32 = "_V_FV32",
+*Symbol8 = "_v_Fv8",
+*SymbolPtr32 = "_P_FP32",
+*SymbolPtr8 = "_p_Fp8";
 int SymFunc = 2;
 int CommaExp = 0, AssnExp = 1, LorExp = 2, LandExp = 3,
 BorExp = 4, BxorExp = 5, BandExp = 6, EqExp = 7, RelExp = 8,
@@ -163,15 +163,17 @@ int keywords_scan(int kw_scan_i){
 
 int print_symbols(int symbol_id_iter, int num_symbols){
 	if(symbol_id_iter == num_symbols)return 0;
-	printf("%c\t%c%c\t%i\t%i\t%i\n", **(Symbols + symbol_id_iter), **(STypes + symbol_id_iter), *(*(STypes + symbol_id_iter) + 1),
-		*(SVals + symbol_id_iter), *(SymbolAddrs + symbol_id_iter), *(Stack + *(SymbolAddrs + symbol_id_iter)));
+	printf("%c\t%c%c%c\t%i\t%i\t%i\n", **(Symbols + symbol_id_iter), **(STypes + symbol_id_iter),
+		*(*(STypes + symbol_id_iter) + 1),*(*(STypes + symbol_id_iter) + 2),
+		*(SVals + symbol_id_iter), *(SymbolAddrs + symbol_id_iter),
+		*(Stack + *(SymbolAddrs + symbol_id_iter)));
 	return print_symbols(symbol_id_iter + 1, num_symbols);
 }
 //Forward link identifiers
 int object_link(int sym_meet_idx, int sym_pre_iter){
 	if(sym_pre_iter == 0){
 		return 0;
-	} else if(*(*(STypes + sym_pre_iter)+9) == '_'
+	} else if(*(*(STypes + sym_pre_iter)) == '_'
 		&& *(SVals + sym_meet_idx) == *(SVals + sym_pre_iter)
 		&& !memcmp(*(Symbols + sym_meet_idx),
 			*(Symbols + sym_pre_iter), *(SVals + sym_meet_idx))){
@@ -188,7 +190,7 @@ int func_link(int fsym_idx, int fentrance_idx, int sym_pre_iter){
 		return 0;
 	} else if(fsym_idx<0 && *(SymbolAddrs+sym_pre_iter)==fentrance_idx){
 		fsym_idx = sym_pre_iter;
-	} else if(*(*(STypes + sym_pre_iter)+SymFunc) == 'F'
+	} else if(*(*(STypes + sym_pre_iter)+SymFunc+1) == 'F'
 		&& *(SVals + fsym_idx) == *(SVals + sym_pre_iter)
 		&& !memcmp(*(Symbols + fsym_idx),
 			*(Symbols + sym_pre_iter), *(SVals + fsym_idx))){
@@ -261,7 +263,7 @@ int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
 int main_entrance(int sym_pre_iter){
 	if(sym_pre_iter == 0){
 		return 0;
-	} else if(*(*(STypes + sym_pre_iter)+SymFunc) == 'F'
+	} else if(*(*(STypes + sym_pre_iter)+SymFunc+1) == 'F'
 		&& *(SVals + sym_pre_iter) == 4
 		&& !memcmp(*(Symbols + sym_pre_iter), "main", 4)){
 		return sym_pre_iter;
