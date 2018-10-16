@@ -1,7 +1,8 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
-int MemSize;
+int StackSize;
+int SymbolsMemSz;
 FILE *SrcFp;
 char *Src;
 int SrcLen;
@@ -36,7 +37,9 @@ char
 *Symbol32 = "_V_FV32",
 *Symbol8 = "_v_Fv8",
 *SymbolPtr32 = "_P_FP32",
-*SymbolPtr8 = "_p_Fp8";
+*SymbolPtr8 = "_p_Fp8",
+*Lval8addr = "*Ref8",
+*Lval32addr = "*Ref32";
 int SymFunc = 2;
 int CommaExp = 0, AssnExp = 1, LorExp = 2, LandExp = 3,
 BorExp = 4, BxorExp = 5, BandExp = 6, EqExp = 7, RelExp = 8,
@@ -164,7 +167,7 @@ int keywords_scan(int kw_scan_i){
 int print_symbols(int symbol_id_iter, int num_symbols){
 	if(symbol_id_iter == num_symbols)return 0;
 	printf("%c\t%c%c%c\t%i\t%i\t%i\n", **(Symbols + symbol_id_iter), **(STypes + symbol_id_iter),
-		*(*(STypes + symbol_id_iter) + 1),*(*(STypes + symbol_id_iter) + 2),
+		*(*(STypes + symbol_id_iter) + 1), *(*(STypes + symbol_id_iter) + 2),
 		*(SVals + symbol_id_iter), *(SymbolAddrs + symbol_id_iter),
 		*(Stack + *(SymbolAddrs + symbol_id_iter)));
 	return print_symbols(symbol_id_iter + 1, num_symbols);
@@ -188,9 +191,9 @@ int object_link(int sym_meet_idx, int sym_pre_iter){
 int func_link(int fsym_idx, int fentrance_idx, int sym_pre_iter){
 	if(sym_pre_iter == 0){
 		return 0;
-	} else if(fsym_idx<0 && *(SymbolAddrs+sym_pre_iter)==fentrance_idx){
+	} else if(fsym_idx < 0 && *(SymbolAddrs + sym_pre_iter) == fentrance_idx){
 		fsym_idx = sym_pre_iter;
-	} else if(*(*(STypes + sym_pre_iter)+SymFunc+1) == 'F'
+	} else if(*(*(STypes + sym_pre_iter) + SymFunc + 1) == 'F'
 		&& *(SVals + fsym_idx) == *(SVals + sym_pre_iter)
 		&& !memcmp(*(Symbols + fsym_idx),
 			*(Symbols + sym_pre_iter), *(SVals + fsym_idx))){
@@ -246,7 +249,7 @@ int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
 			if(**(Symbols + sym_post_iter + 1) == '='){
 				*(Stack + ObjCtr) = *(SVals + sym_post_iter + 2);
 			} else if(**(Symbols + sym_post_iter + 1) == '('){
-				*(STypes + sym_post_iter) = MetObjType+SymFunc;
+				*(STypes + sym_post_iter) = MetObjType + SymFunc;
 				*(Stack + ObjCtr) = -1;
 			}
 		} else if(ParenCtr == 1 && CurlyCtr == 0){
@@ -263,37 +266,41 @@ int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
 int main_entrance(int sym_pre_iter){
 	if(sym_pre_iter == 0){
 		return 0;
-	} else if(*(*(STypes + sym_pre_iter)+SymFunc+1) == 'F'
+	} else if(*(*(STypes + sym_pre_iter) + SymFunc + 1) == 'F'
 		&& *(SVals + sym_pre_iter) == 4
 		&& !memcmp(*(Symbols + sym_pre_iter), "main", 4)){
 		return sym_pre_iter;
 	}
 	return main_entrance(sym_pre_iter - 1);
 }
-int expr(int *sym_iter, int A, char **expr_type);
-int prim_expr(int *sym_iter, int A, char **expr_type){
+int expr(int *sym_iter, char **expr_type, int A);
+int prim_expr(int *sym_iter, char **expr_type, int A){
+	//FIXME: is_assign
 	if(*(STypes + *sym_iter) == S_char || *(STypes + *sym_iter) == S_digit){
 		//constant
-		A= *(SVals + *sym_iter);
+		A = *(SVals + *sym_iter);
 		*expr_type = Symbol32;
+		*sym_iter = *sym_iter + 1;
 	} else if(*(*(STypes + *sym_iter)) == '_'){
 		//identifier
 		if(*(SymbolAddrs + *sym_iter) < 0){
 			//Function args
-			A= *(Stack + Top + *(SymbolAddrs + *sym_iter));
+			A = *(Stack + Top + *(SymbolAddrs + *sym_iter));
 		} else{
 			//Globals
-			A= *(Stack + *(SymbolAddrs + *sym_iter));
+			A = *(Stack + *(SymbolAddrs + *sym_iter));
 		}
 		*expr_type = *(STypes + *sym_iter);
+		*sym_iter = *sym_iter + 1;
 	} else if(*(*(STypes + *sym_iter)) == '"'){
 		//string-literal
-		A= (int)*(Symbols + *sym_iter);
+		A = (int)*(Symbols + *sym_iter);
 		*expr_type = SymbolPtr8;
+		*sym_iter = *sym_iter + 1;
 	} else if(*(*(Symbols + *sym_iter)) == '('){
 		//(expression)
 		*sym_iter = *sym_iter + 1;
-		A = expr(sym_iter, 0, expr_type);
+		A = expr(sym_iter, expr_type, A);
 		if(*(*(Symbols + *sym_iter)) == ')'){
 			*sym_iter = *sym_iter + 1;
 		} else{
@@ -303,37 +310,175 @@ int prim_expr(int *sym_iter, int A, char **expr_type){
 	} else{
 		*expr_type = 0;
 	}
+
 	return A;
 }
-int assign_expr(int *sym_iter, int A, char **expr_type);
-int postfix_expression(int *sym_iter, int A, char **expr_type){
+int assign_expr(int *sym_iter, char **expr_type, int A);
+int argument_expr_list(int *sym_iter, char **expr_type, int A, int num_args){
+	A = assign_expr(sym_iter, expr_type, A);
+	if(*expr_type == 0){
+		//()-expr
+		return num_args;
+	}
+	*(Stack + Top) = A;
+	Top = Top + 1;
+	if(*(*(Symbols + *sym_iter)) == ','){
+		*sym_iter = *sym_iter + 1;
+		return argument_expr_list(sym_iter, expr_type, A, num_args + 1);
+	} else return num_args;
+}
+int compound_statement(int *sym_iter, char **expr_type, int A){
+	if(*(STypes + *sym_iter) == S_return){
+		*sym_iter = *sym_iter + 1;
+		A = expr(sym_iter, expr_type, 0);
+		if(**(Symbols + *sym_iter) == ';'){
+			*sym_iter = *sym_iter + 1;
+			return expr(sym_iter, expr_type, A);
+		} else{
+
+			//semi-c expected
+		}
+
+	} else{
+		//error
+	}
+	return 0;
+}
+int call_func(int *sym_iter, char **expr_type,
+	int A_func_addr, int num_args, int ret_addr, char *ret_type){
+	*sym_iter = A_func_addr;
+	A_func_addr = compound_statement(sym_iter, expr_type, ret_addr);
+	*sym_iter = ret_addr;
+	*expr_type = ret_type;
+	Top = Top - num_args;
+	return A_func_addr;
+}
+int postfix_expression(int *sym_iter, char **expr_type, int A, int num_args, char *func_ret_type){
+	//FIXME: incorrect, see 6.5.2
+	//TODO: is_assign
 	//function calls
-	A = prim_expr(sym_iter, A, expr_type);
+	A = prim_expr(sym_iter, expr_type, A);
+	if(*expr_type == 0){
+		//()-expr
+		return A;
+	} else if(*(*(Symbols + *sym_iter)) == '('){
+		*sym_iter = *sym_iter + 1;
+		func_ret_type = *expr_type;
+		num_args = argument_expr_list(sym_iter, expr_type, A, 0);
+		if(*(*(Symbols + *sym_iter)) == ')'){
+			A = call_func(sym_iter, expr_type, A, num_args, *sym_iter + 1, func_ret_type);
+			return A;
+		} else{
+			return 0;
+			//error
+		}
+	} else{
+		return A;
+		//No func call
+	}
 }
-int assign_expr(int *sym_iter, int A, char **expr_type){
+char *get_cast_type(int *sym_iter, char *expr_type){
+	if(**(Symbols + *sym_iter) == ')'){
+		return expr_type;
+	} else if(**(Symbols + *sym_iter) == '*'){
+		if(expr_type == Symbol8){
+			expr_type = SymbolPtr8;
+		} else{
+			expr_type = SymbolPtr32;
+		}
+	}
+	*sym_iter = *sym_iter + 1;
+	return get_cast_type(sym_iter, expr_type);
+}
+int unary_cast_expr(int *sym_iter, char **expr_type, int A, int is_assign){
+	//TODO: complete u-c-expr
+	if(**(Symbols + *sym_iter) == '('){
+		if(*(STypes + *sym_iter + 1) == S_char){
+			*sym_iter = *sym_iter + 1;
+			*expr_type = get_cast_type(sym_iter, S_char);
+			if(**(Symbols + *sym_iter) == ')'){
+				*sym_iter = *sym_iter + 1;
+				return unary_cast_expr(sym_iter, expr_type, 0, 0);
+			} else{
+				//error
+			}
+		} else if(*(STypes + *sym_iter + 1) == S_int){
+			*sym_iter = *sym_iter + 1;
+			*expr_type = get_cast_type(sym_iter, S_int);
+			if(**(Symbols + *sym_iter) == ')'){
+				*sym_iter = *sym_iter + 1;
+				return unary_cast_expr(sym_iter, expr_type, 0, 0);
+			} else{
+				//error
+			}
+		} else{
+			//not cast-expr
+		}
+	} else if(**(Symbols + *sym_iter) == '!'){
+		*sym_iter = *sym_iter + 1;
+		return !unary_cast_expr(sym_iter, expr_type, 0, 0);
+	} else if(**(Symbols + *sym_iter) == '&'){
+		*sym_iter = *sym_iter + 1;
+		if(**(STypes + *sym_iter) == '_'){
+		}
+	} else if(**(Symbols + *sym_iter) == '*'){
+		*sym_iter = *sym_iter + 1;
+		A = unary_cast_expr(sym_iter, expr_type, 0, 0);
+		if(*expr_type == SymbolPtr8){
+			if(is_assign){
+				*expr_type = Lval8addr;
+			} else{
+				A = *(char*)A;
+				*expr_type = Symbol8;
+			}
+		} else if(*expr_type == SymbolPtr32){
+			if(is_assign){
+				*expr_type = Lval32addr;
+			} else{
+				A = *(int*)A;
+				*expr_type = Symbol32;
+			}
+		} else if(*expr_type!=0){
+			if(is_assign){
+				*expr_type = Lval8addr;
+			} else{
+				*expr_type = Symbol8;
+				A = *(int*)A;
+			}
+		} else{
+			//error
+		}
+		return A;
+	} else {//postfix-expr
+
+	}
+	return postfix_expression(sym_iter, expr_type, A, 0, 0);
+}
+int assign_expr(int *sym_iter, char **expr_type, int A){
 	return A;
 }
-int expr(int *sym_iter, int A, char **expr_type){
+int expr(int *sym_iter, char **expr_type, int A){
 	return A;
 }
 
 int main(int argc, char** argv){
 	if(argc < 2)return(9);
-	MemSize = 10000 * 10;
+	StackSize = 1024*1024*1;
+	SymbolsMemSz = 1024*1024;
 	SrcFp = fopen(*(argv + 1), "r");
-	Src = malloc(MemSize);
-	SrcLen = fread(Src, 1, MemSize, SrcFp);
+	Src = malloc(StackSize);
+	SrcLen = fread(Src, 1, StackSize, SrcFp);
 	*(Src + SrcLen) = 0;
 	//All Tokens
-	Symbols = malloc(MemSize);
+	Symbols = malloc(StackSize);
 	//Token Type
-	STypes = malloc(MemSize);
+	STypes = malloc(StackSize);
 	//Token values: numeric for int/char, ptr for "", length for ID
-	SVals = malloc(MemSize);
+	SVals = malloc(StackSize);
 	//Identifier address relative to Stack
-	SymbolAddrs = malloc(MemSize);
+	SymbolAddrs = malloc(StackSize);
 	NumSymbols = SymbolsScan(Src, 0);
-	Stack = malloc(MemSize);
+	Stack = malloc(StackSize);
 	Top = 0;
 	Frame = 0;
 	*(Stack + Top) = argc - 2;
