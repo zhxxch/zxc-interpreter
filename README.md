@@ -8,3 +8,5 @@ C语言（子集）解释器：
 支持int、 char、if、else、return；
 
 printf(·,·)、malloc(·)……
+
+if else 语句必须使用复合语句（花括号）
