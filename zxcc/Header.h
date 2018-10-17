@@ -141,7 +141,7 @@ int expr_asm(int *OpStack, int *OpResTypeStack, int *OpPrioStack, int TopOp, int
 		return TopOp;
 	}
 }
-int expr(char **Tokens, char **TTypes, int *TVals, int TOffset,
+int assign_expr(char **Tokens, char **TTypes, int *TVals, int TOffset,
 	int *OpStack, int *OpResTypeStack, int *OpPrioStack, int TopOp, int *Asm, int *AsmLen){
 
 	if(**Tokens == ';'){

@@ -1,18 +1,22 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
+#include<io.h>
+#include<fcntl.h>
 int StackSize;
 int SymbolsMemSz;
-FILE *SrcFp;
+int SrcFp;
 char *Src;
-int SrcLen;
+int SrcLen = 0;
 char** Symbols;
 char** STypes;
 int* SVals;
 int* SymbolAddrs;
-int NumSymbols;
+int NumSymbols = 0;
 int *Stack;
 int Top = 0, Frame = 0;
+int PC = 0;
+char *ExprType = 0;
 char
 *S_int = "int",
 *S_char = "char",
@@ -23,11 +27,10 @@ char
 *S_memcmp = "memcmp",
 *S_malloc = "malloc",
 *S_memchr = "memchr",
-*S_free = "free",
-*S_fopen = "fopen",
-*S_fread = "fread",
-*S_fexit = "exit",
-*S_file = "FILE",
+*S_memcpy = "memcpy",
+*S_open = "_open",
+*S_read = "_read",
+*S_exit = "exit",
 *S_digit = "0123456789",
 *S_id1st = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
 *S_id = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
@@ -140,20 +143,20 @@ char* keywords_type(char* kw_ptr, int kw_len){
 		return S_else;
 	} else if(!memcmp(S_return, kw_ptr, kw_len) && kw_len == 6){
 		return S_return;
+	} else if(!memcmp(S_printf, kw_ptr, kw_len) && kw_len == 6){
+		return S_memcmp;
 	} else if(!memcmp(S_memcmp, kw_ptr, kw_len) && kw_len == 6){
 		return S_memcmp;
 	} else if(!memcmp(S_malloc, kw_ptr, kw_len) && kw_len == 6){
 		return S_malloc;
 	} else if(!memcmp(S_memchr, kw_ptr, kw_len) && kw_len == 6){
 		return S_memchr;
-	} else if(!memcmp(S_free, kw_ptr, kw_len) && kw_len == 4){
-		return S_free;
-	} else if(!memcmp(S_fopen, kw_ptr, kw_len) && kw_len == 5){
-		return S_fopen;
-	} else if(!memcmp(S_fread, kw_ptr, kw_len) && kw_len == 5){
-		return S_fread;
-	} else if(!memcmp(S_file, kw_ptr, kw_len) && kw_len == 4){
-		return S_file;
+	} else if(!memcmp(S_memcpy, kw_ptr, kw_len) && kw_len == 6){
+		return S_memcpy;
+	} else if(!memcmp(S_open, kw_ptr, kw_len) && kw_len == 5){
+		return S_open;
+	} else if(!memcmp(S_read, kw_ptr, kw_len) && kw_len == 5){
+		return S_read;
 	} else return S_id;
 }
 int keywords_scan(int kw_scan_i){
@@ -273,136 +276,84 @@ int main_entrance(int sym_pre_iter){
 	}
 	return main_entrance(sym_pre_iter - 1);
 }
-int expr(int *sym_iter, char **expr_type, int A);
-int prim_expr(int *sym_iter, char **expr_type, int A){
+int assign_expr(int A);
+int prim_expr(int A){
 	//FIXME: is_assign
-	if(*(STypes + *sym_iter) == S_char || *(STypes + *sym_iter) == S_digit){
+	if(*(STypes + PC) == S_char || *(STypes + PC) == S_digit){
 		//constant
-		A = *(SVals + *sym_iter);
-		*expr_type = Symbol32;
-		*sym_iter = *sym_iter + 1;
-	} else if(*(*(STypes + *sym_iter)) == '_'){
+		A = *(SVals + PC);
+		ExprType = Symbol32;
+		PC = PC + 1;
+	} else if(*(*(STypes + PC)) == '_'){
 		//identifier
-		if(*(SymbolAddrs + *sym_iter) < 0){
+		if(*(SymbolAddrs + PC) < 0){
 			//Function args
-			A = *(Stack + Top + *(SymbolAddrs + *sym_iter));
+			A = *(Stack + Top + *(SymbolAddrs + PC));
 		} else{
 			//Globals
-			A = *(Stack + *(SymbolAddrs + *sym_iter));
+			A = *(Stack + *(SymbolAddrs + PC));
 		}
-		*expr_type = *(STypes + *sym_iter);
-		*sym_iter = *sym_iter + 1;
-	} else if(*(*(STypes + *sym_iter)) == '"'){
+		ExprType = *(STypes + PC);
+		PC = PC + 1;
+	} else if(*(*(STypes + PC)) == '"'){
 		//string-literal
-		A = (int)*(Symbols + *sym_iter);
-		*expr_type = SymbolPtr8;
-		*sym_iter = *sym_iter + 1;
-	} else if(*(*(Symbols + *sym_iter)) == '('){
+		A = (int)*(Symbols + PC);
+		ExprType = SymbolPtr8;
+		PC = PC + 1;
+	} else if(*(*(Symbols + PC)) == '('){
 		//(expression)
-		*sym_iter = *sym_iter + 1;
-		A = expr(sym_iter, expr_type, A);
-		if(*(*(Symbols + *sym_iter)) == ')'){
-			*sym_iter = *sym_iter + 1;
+		PC = PC + 1;
+		A = assign_expr(A);
+		if(*(*(Symbols + PC)) == ')'){
+			PC = PC + 1;
 		} else{
 			//rparen expected
-			*expr_type = 0;
+			ExprType = 0;
 		}
 	} else{
-		*expr_type = 0;
+		//function-like-keyword
+		//or error
+		ExprType = 0;
 	}
 
 	return A;
 }
-int assign_expr(int *sym_iter, char **expr_type, int A);
-int argument_expr_list(int *sym_iter, char **expr_type, int A, int num_args){
-	A = assign_expr(sym_iter, expr_type, A);
-	if(*expr_type == 0){
+int argument_expr_list(int A, int num_args){
+	A = assign_expr(A);
+	if(ExprType == 0){
 		//()-expr
 		return num_args;
 	}
 	*(Stack + Top) = A;
 	Top = Top + 1;
-	if(*(*(Symbols + *sym_iter)) == ','){
-		*sym_iter = *sym_iter + 1;
-		return argument_expr_list(sym_iter, expr_type, A, num_args + 1);
+	if(*(*(Symbols + PC)) == ','){
+		PC = PC + 1;
+		return argument_expr_list(A, num_args + 1);
 	} else return num_args;
 }
-int compound_statement(int *sym_iter, char **expr_type, int A){
-	//TODO: not tested, consult 6.8
-	A = statement(sym_iter, expr_type, A);
-	if(**(Symbols + *sym_iter) == '}'){
-		*sym_iter = *sym_iter + 1;
-		return 0;
-	} else{
-		return compound_statement(sym_iter, expr_type, A);
-	}
-}
-int expr_statement(int *sym_iter, char **expr_type, int A){
-	A = expr(sym_iter, expr_type, A);
-		if(**(Symbols + *sym_iter) == ';'){
-			*sym_iter = *sym_iter + 1;
-		} else{
-			//error
-		}
-}
-int statement(int *sym_iter, char **expr_type, int A){
-	//TODO: expr-statement, selection-statement
-	if(*(STypes + *sym_iter) == S_return){
-		//jump-statement
-		*sym_iter = *sym_iter + 1;
-		return expr_statement(sym_iter, expr_type, A);
-	} else if(**(Symbols + *sym_iter) == '{'){
-		*sym_iter = *sym_iter + 1;
-		return compound_statement(sym_iter, expr_type, A);
-	} else if(*(STypes + *sym_iter) == S_if){
-		*sym_iter = *sym_iter + 1;
-		if(**(Symbols + *sym_iter) == '('){
-			*sym_iter = *sym_iter + 1;
-			A = expr(sym_iter, expr_type, 0);
-		} else{
-			//error
-		}
-		if(**(Symbols + *sym_iter) == ')'){
-			*sym_iter = *sym_iter + 1;
-		} else{
-			//error
-		}
-		//TODO: for if
-		if(A){
-			return statement(sym_iter, expr_type, A);
-		} else if(*(STypes + *sym_iter) == S_else){
-			*sym_iter = *sym_iter + 1;
-			return statement(sym_iter, expr_type, A);
-		}
-	} else {
-		return expr_statement(sym_iter, expr_type, A);
-	}
-}
-int call_func(int *sym_iter, char **expr_type,
-	int A_func_addr, int num_args, int ret_addr, char *ret_type){
+int call_func(int A_func_addr, int num_args, int ret_addr, char *ret_type){
 	//TODO: tail call; intrinsic function calls
-	*sym_iter = A_func_addr + 1;
-	A_func_addr = compound_statement(sym_iter, expr_type, ret_addr);
-	*sym_iter = ret_addr;
-	*expr_type = ret_type;
+	PC = A_func_addr + 1;
+	A_func_addr = compound_statement(ret_addr);
+	PC = ret_addr;
+	ExprType = ret_type;
 	Top = Top - num_args;
 	return A_func_addr;
 }
-int postfix_expression(int *sym_iter, char **expr_type, int A, int num_args, char *func_ret_type){
+int postfix_expression(int A, int num_args, char *func_ret_type){
 	//FIXME: incorrect, see 6.5.2
 	//TODO: is_assign
 	//function calls
-	A = prim_expr(sym_iter, expr_type, A);
-	if(*expr_type == 0){
+	A = prim_expr(A);
+	if(ExprType == 0){
 		//()-expr
 		return A;
-	} else if(*(*(Symbols + *sym_iter)) == '('){
-		*sym_iter = *sym_iter + 1;
-		func_ret_type = *expr_type;
-		num_args = argument_expr_list(sym_iter, expr_type, A, 0);
-		if(*(*(Symbols + *sym_iter)) == ')'){
-			A = call_func(sym_iter, expr_type, A, num_args, *sym_iter + 1, func_ret_type);
-			return A;
+	} else if(*(*(Symbols + PC)) == '('){
+		PC = PC + 1;
+		func_ret_type = ExprType;
+		num_args = argument_expr_list(A, 0);
+		if(*(*(Symbols + PC)) == ')'){
+			return call_func(A, num_args, PC + 1, func_ret_type);
 		} else{
 			return 0;
 			//error
@@ -412,72 +363,78 @@ int postfix_expression(int *sym_iter, char **expr_type, int A, int num_args, cha
 		//No func call
 	}
 }
-char *get_cast_type(int *sym_iter, char *expr_type){
-	if(**(Symbols + *sym_iter) == ')'){
-		return expr_type;
-	} else if(**(Symbols + *sym_iter) == '*'){
-		if(expr_type == Symbol8){
-			expr_type = SymbolPtr8;
+char *get_cast_type(){
+	if(**(Symbols + PC) == ')'){
+		return ExprType;
+	} else if(**(Symbols + PC) == '*'){
+		if(ExprType == Symbol8){
+			ExprType = SymbolPtr8;
 		} else{
-			expr_type = SymbolPtr32;
+			ExprType = SymbolPtr32;
 		}
 	}
-	*sym_iter = *sym_iter + 1;
-	return get_cast_type(sym_iter, expr_type);
+	PC = PC + 1;
+	return get_cast_type();
 }
-int unary_cast_expr(int *sym_iter, char **expr_type, int A, int is_assign){
+int unary_cast_expr(char *cast_to_type, int A, int is_assign){
 	//TODO: complete u-c-expr
-	if(**(Symbols + *sym_iter) == '('){
-		if(*(STypes + *sym_iter + 1) == S_char){
-			*sym_iter = *sym_iter + 1;
-			*expr_type = get_cast_type(sym_iter, S_char);
-			if(**(Symbols + *sym_iter) == ')'){
-				*sym_iter = *sym_iter + 1;
-				return unary_cast_expr(sym_iter, expr_type, 0, 0);
+	if(**(Symbols + PC) == '('){
+		if(*(STypes + PC + 1) == S_char){
+			PC = PC + 1;
+			cast_to_type = get_cast_type(S_char);
+			if(**(Symbols + PC) == ')'){
+				PC = PC + 1;
+				A = unary_cast_expr(0, 0, 0);
+				ExprType = cast_to_type;
+				return A;
 			} else{
 				//error
 			}
-		} else if(*(STypes + *sym_iter + 1) == S_int){
-			*sym_iter = *sym_iter + 1;
-			*expr_type = get_cast_type(sym_iter, S_int);
-			if(**(Symbols + *sym_iter) == ')'){
-				*sym_iter = *sym_iter + 1;
-				return unary_cast_expr(sym_iter, expr_type, 0, 0);
+		} else if(*(STypes + PC + 1) == S_int){
+			PC = PC + 1;
+			cast_to_type = get_cast_type(S_int);
+			if(**(Symbols + PC) == ')'){
+				PC = PC + 1;
+				A = unary_cast_expr(0, 0, 0);
+				ExprType = cast_to_type;
+				return A;
 			} else{
 				//error
 			}
 		} else{
 			//not cast-expr
 		}
-	} else if(**(Symbols + *sym_iter) == '!'){
-		*sym_iter = *sym_iter + 1;
-		return !unary_cast_expr(sym_iter, expr_type, 0, 0);
-	} else if(**(Symbols + *sym_iter) == '&'){
-		*sym_iter = *sym_iter + 1;
-		if(**(STypes + *sym_iter) == '_'){
+	} else if(**(Symbols + PC) == '!'){
+		PC = PC + 1;
+		ExprType = Symbol32;
+		return !unary_cast_expr(0, 0, 0);
+	} else if(**(Symbols + PC) == '&'){
+		//TODO
+		PC = PC + 1;
+		if(**(STypes + PC) == '_'){
 		}
-	} else if(**(Symbols + *sym_iter) == '*'){
-		*sym_iter = *sym_iter + 1;
-		A = unary_cast_expr(sym_iter, expr_type, 0, 0);
-		if(*expr_type == SymbolPtr8){
+	} else if(**(Symbols + PC) == '*'){
+		PC = PC + 1;
+		A = unary_cast_expr(0, 0, 0);
+		if(ExprType == SymbolPtr8){
 			if(is_assign){
-				*expr_type = Lval8addr;
+				ExprType = Lval8addr;
 			} else{
 				A = *(char*)A;
-				*expr_type = Symbol8;
+				ExprType = Symbol8;
 			}
-		} else if(*expr_type == SymbolPtr32){
+		} else if(ExprType == SymbolPtr32){
 			if(is_assign){
-				*expr_type = Lval32addr;
+				ExprType = Lval32addr;
 			} else{
 				A = *(int*)A;
-				*expr_type = Symbol32;
+				ExprType = Symbol32;
 			}
-		} else if(*expr_type != 0){
+		} else if(ExprType != 0){
 			if(is_assign){
-				*expr_type = Lval8addr;
+				ExprType = Lval8addr;
 			} else{
-				*expr_type = Symbol8;
+				ExprType = Symbol8;
 				A = *(int*)A;
 			}
 		} else{
@@ -487,22 +444,71 @@ int unary_cast_expr(int *sym_iter, char **expr_type, int A, int is_assign){
 	} else {//postfix-expr
 
 	}
-	return postfix_expression(sym_iter, expr_type, A, 0, 0);
+	return postfix_expression(A, 0, 0);
 }
-int assign_expr(int *sym_iter, char **expr_type, int A){
+int assign_expr(int A){
 	return A;
 }
-int expr(int *sym_iter, char **expr_type, int A){
-	return A;
+int statement(int A);
+int compound_statement(int A){
+	//TODO: not tested, consult 6.8
+	A = statement(A);
+	if(**(Symbols + PC) == '}'){
+		PC = PC + 1;
+		return 0;
+	} else{
+		return compound_statement(A);
+	}
 }
-
+int expr_statement(int A){
+	A = assign_expr(A);
+	if(**(Symbols + PC) == ';'){
+		PC = PC + 1;
+	} else{
+		//error
+	}
+}
+int statement(int A){
+	//TODO: expr-statement, selection-statement
+	if(*(STypes + PC) == S_return){
+		//jump-statement
+		PC = PC + 1;
+		return expr_statement(A);
+	} else if(**(Symbols + PC) == '{'){
+		PC = PC + 1;
+		return compound_statement(A);
+	} else if(*(STypes + PC) == S_if){
+		PC = PC + 1;
+		if(**(Symbols + PC) == '('){
+			PC = PC + 1;
+			A = assign_expr(0);
+		} else{
+			//error
+		}
+		if(**(Symbols + PC) == ')'){
+			PC = PC + 1;
+		} else{
+			//error
+		}
+		//TODO: for if
+		if(A){
+			return statement(A);
+		} else if(*(STypes + PC) == S_else){
+			PC = PC + 1;
+			return statement(A);
+		}
+	} else {
+		return expr_statement(A);
+	}
+}
 int main(int argc, char** argv){
 	if(argc < 2)return(9);
 	StackSize = 1024 * 1024 * 1;
 	SymbolsMemSz = 1024 * 1024;
-	SrcFp = fopen(*(argv + 1), "r");
+	//_O_RDWR|_O_TEXT
+	SrcFp = _open(*(argv + 1), 16386);
 	Src = malloc(StackSize);
-	SrcLen = fread(Src, 1, StackSize, SrcFp);
+	SrcLen = _read(SrcFp, Src, StackSize);
 	*(Src + SrcLen) = 0;
 	//All Tokens
 	Symbols = malloc(StackSize);
