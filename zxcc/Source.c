@@ -2,21 +2,12 @@
 #include<stdlib.h>
 #include<string.h>
 #include<io.h>
-int StackSize;
-int SymbolsMemSz;
-int SrcFp;
+int StackSize, SymbolsMemSz, SrcFp,SrcLen = 0,NumSymbols = 0, SymFunc = 2;
 char *Src;
-int SrcLen = 0;
-char** Symbols;
-char** STypes;
-int* SVals;
-int* SymbolAddrs;
-int NumSymbols = 0;
-int *Stack;
-int *Top;
-int *Frame;
-int PC = 0;
-int Returning = 0;
+char** Symbols, **STypes;
+int* SVals, *SymbolAddrs;
+int *Stack, *Top, *Frame;
+int PC = 0, Returning = 0;
 char *ExprType = 0;
 char
 *S_int = "int....KEYWORD",
@@ -45,11 +36,6 @@ char
 *SymbolPtr8 = "&p&Fp8",
 *Lval8addr = "*Ref8",
 *Lval32addr = "*Ref32";
-int SymFunc = 2;
-int CommaExp = 0, AssnExp = 1, LorExp = 2, LandExp = 3,
-BorExp = 4, BxorExp = 5, BandExp = 6, EqExp = 7, RelExp = 8,
-AddExp = 9, MulExp = 10, CastExp = 11, UnaryExp = 12, CallExp = 13, PrimExp = 14;
-int Ptr8Exp = 15, Ptr32Exp = 16, IntExp = 17, Int32Exp = 18, CharExp = 19;
 
 char* skip_line(char *src){
 	if(*src == '\n'){ return src + 1; }
@@ -110,7 +96,6 @@ char* identifier_scan(char *src, int *len){
 	}
 	return src;
 }
-
 int SymbolsScan(char *src, int SymCtr){
 	*(Symbols + SymCtr) = src;
 	*(STypes + SymCtr) = 0;
@@ -566,6 +551,12 @@ int lor_expr(int A_land){
 	return A_land;
 }
 int assign_expr(int A){
+	A = unary_cast_expr(0, 0, 1);
+	if(**(Symbols + PC) == '='){
+		//assign
+	} else{
+		//no assignment
+	}
 	return A;
 }
 int statement(int A);
