@@ -507,6 +507,7 @@ int mul_expr(int A_cast){
 	return A_cast;
 }
 int add_expr(int A_mul){
+	//FIXME: Pointers
 	if(**(Symbols + PC) == '+'){
 		PC = PC + 1;
 		return add_expr(A_mul + mul_expr(unary_cast_expr(0, 0, 0)));
