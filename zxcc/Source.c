@@ -327,48 +327,33 @@ int argument_expr_list(int *sym_iter, char **expr_type, int A, int num_args){
 		return argument_expr_list(sym_iter, expr_type, A, num_args + 1);
 	} else return num_args;
 }
-int jump_statement(int *sym_iter, char **expr_type, int A){
-	A = expr(sym_iter, expr_type, 0);
-	if(**(Symbols + *sym_iter) == ';'){
-		*sym_iter = *sym_iter + 1;
-	} else{
-
-		//error: semi-c expected
-	}
-	return A;
-}
 int compound_statement(int *sym_iter, char **expr_type, int A){
-	//TODO: not correct, consult 6.8
+	//TODO: not tested, consult 6.8
+	A = statement(sym_iter, expr_type, A);
 	if(**(Symbols + *sym_iter) == '}'){
-		return 0;
-	} else if(*(STypes + *sym_iter) == S_return){
 		*sym_iter = *sym_iter + 1;
-		return jump_statement(sym_iter, expr_type, A);
-
+		return 0;
 	} else{
-		//error
+		return compound_statement(sym_iter, expr_type, A);
 	}
-	return 0;
+}
+int expr_statement(int *sym_iter, char **expr_type, int A){
+	A = expr(sym_iter, expr_type, A);
+		if(**(Symbols + *sym_iter) == ';'){
+			*sym_iter = *sym_iter + 1;
+		} else{
+			//error
+		}
 }
 int statement(int *sym_iter, char **expr_type, int A){
 	//TODO: expr-statement, selection-statement
 	if(*(STypes + *sym_iter) == S_return){
 		//jump-statement
 		*sym_iter = *sym_iter + 1;
-		A = expr(sym_iter, expr_type, 0);
-		if(**(Symbols + *sym_iter) == ';'){
-			*sym_iter = *sym_iter + 1;
-		} else{
-			//error: semi-c expected
-		}
+		return expr_statement(sym_iter, expr_type, A);
 	} else if(**(Symbols + *sym_iter) == '{'){
 		*sym_iter = *sym_iter + 1;
-		A = compound_statement(sym_iter, expr_type, A);
-		if(**(Symbols + *sym_iter) == '}'){
-			*sym_iter = *sym_iter + 1;
-		} else{
-			//error
-		}
+		return compound_statement(sym_iter, expr_type, A);
 	} else if(*(STypes + *sym_iter) == S_if){
 		*sym_iter = *sym_iter + 1;
 		if(**(Symbols + *sym_iter) == '('){
@@ -384,17 +369,18 @@ int statement(int *sym_iter, char **expr_type, int A){
 		}
 		//TODO: for if
 		if(A){
-
-		}else if(*(STypes + *sym_iter) == S_else){
-			//TODO
+			return statement(sym_iter, expr_type, A);
+		} else if(*(STypes + *sym_iter) == S_else){
+			*sym_iter = *sym_iter + 1;
+			return statement(sym_iter, expr_type, A);
 		}
 	} else {
-		//TODO: for expressions
+		return expr_statement(sym_iter, expr_type, A);
 	}
-	return A;
 }
 int call_func(int *sym_iter, char **expr_type,
 	int A_func_addr, int num_args, int ret_addr, char *ret_type){
+	//TODO: tail call; intrinsic function calls
 	*sym_iter = A_func_addr + 1;
 	A_func_addr = compound_statement(sym_iter, expr_type, ret_addr);
 	*sym_iter = ret_addr;
