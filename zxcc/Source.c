@@ -493,6 +493,9 @@ int unary_cast_expr(char *cast_to_type, int A, int req_ref){
 			return *(char*)A;
 		} else{}//error
 	}
+	if(req_ref){
+		A = get_object_ref(A);
+	}
 	return postfix_expression(A, 0, 0, 0);
 }
 int mul_expr(int A_cast){
@@ -506,49 +509,96 @@ int mul_expr(int A_cast){
 	}
 	return A_cast;
 }
-int add_expr(int A_mul){
+int add_expr(int A_add, int A_mul){
 	//FIXME: Pointers
 	if(**(Symbols + PC) == '+'){
 		PC = PC + 1;
-		return add_expr(A_mul + mul_expr(unary_cast_expr(0, 0, 0)));
+		if(ExprType == SymbolPtr32){
+			//((int*)ptr+1)
+			A_mul = mul_expr(unary_cast_expr(0, 0, 0));
+			ExprType = SymbolPtr32;
+			return add_expr(A_add+4*A_mul, 0);
+		}
+				if(ExprType == SymbolPtr8){
+			//((char*)ptr+1)
+			ExprType = SymbolPtr8;
+			return add_expr(A_add+A_mul, 0);
+		}
+		A_mul = mul_expr(unary_cast_expr(0, 0, 0));
+		if(ExprType == SymbolPtr32){
+			//(1+(int*)ptr)
+			ExprType = SymbolPtr32;
+			return add_expr(4*A_add+A_mul, 0);
+		}
+		if(ExprType == SymbolPtr8){
+			//(1+(char*)ptr)
+			ExprType = SymbolPtr8;
+			return add_expr(A_add+A_mul, 0);
+		}
+
+		return add_expr(A_add+A_mul, 0);
 	}
 	if(**(Symbols + PC) == '-'){
 		PC = PC + 1;
-		return add_expr(A_mul - mul_expr(unary_cast_expr(0, 0, 0)));
+				PC = PC + 1;
+		if(ExprType == SymbolPtr32){
+			//(ptr-1)
+			A_mul = mul_expr(unary_cast_expr(0, 0, 0));
+			ExprType = SymbolPtr32;
+			return add_expr(A_add-4*A_mul, 0);
+		}
+		if(ExprType == SymbolPtr8){
+			//((char*)ptr-1)
+			ExprType = SymbolPtr8;
+			return add_expr(A_add-A_mul, 0);
+		}
+		A_mul = mul_expr(unary_cast_expr(0, 0, 0));
+		if(ExprType == SymbolPtr32){
+			//(1-ptr):error
+		}
+		return add_expr(A_add-A_mul, 0);
 	}
-	return A_mul;
+	return A_add;
 }
 int rel_expr(int A_add){
 	if(**(Symbols + PC) == '<'){
 		PC = PC + 1;
 		if(*(STypes + PC) == S_op2){
-			return add_expr(A_add <= add_expr(mul_expr(unary_cast_expr(0, 0, 0))));
+			return rel_expr(A_add <= add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0));
 		} else{
-			return add_expr(A_add < add_expr(mul_expr(unary_cast_expr(0, 0, 0))));
+			return rel_expr(A_add < add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0));
 		}
 	}
 	if(**(Symbols + PC) == '>'){
 		PC = PC + 1;
 		if(*(STypes + PC) == S_op2){
-			return add_expr(A_add >= add_expr(mul_expr(unary_cast_expr(0, 0, 0))));
+			return rel_expr(A_add >= add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0));
 		} else{
-			return add_expr(A_add > add_expr(mul_expr(unary_cast_expr(0, 0, 0))));
+			return rel_expr(A_add > add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0));
 		}
 	}
 	if(*(STypes + PC) == S_op2){
 		PC = PC + 1;
 		if(**(Symbols + PC) == '='){
-			return add_expr(A_add == add_expr(mul_expr(unary_cast_expr(0, 0, 0))));
+			return rel_expr(A_add == add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0));
 		} if(**(Symbols + PC) == '!'){
-			return add_expr(A_add != add_expr(mul_expr(unary_cast_expr(0, 0, 0))));
+			return rel_expr(A_add != add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0));
 		}
 	}
 	return A_add;
 }
 int land_expr(int A_rel){
+	if(**(Symbols + PC) == '&' && *(STypes + PC) == S_op2){
+		PC = PC + 1;
+		return land_expr(A_rel && rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0)));
+	}
 	return A_rel;
 }
 int lor_expr(int A_land){
+	if(**(Symbols + PC) == '|' && *(STypes + PC) == S_op2){
+		PC = PC + 1;
+		return lor(A_land && land_expr(rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0))));
+	}
 	return A_land;
 }
 int assign_expr(int A){
