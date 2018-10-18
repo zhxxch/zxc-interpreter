@@ -1,8 +1,8 @@
-#include<stdio.h>
+﻿#include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
 #include<io.h>
-int StackSize, SymbolsMemSz, SrcFp,SrcLen = 0,NumSymbols = 0, SymFunc = 2;
+int StackSize, SymbolsMemSz, SrcFp, SrcLen = 0, NumSymbols = 0, SymFunc = 2;
 char *Src;
 char** Symbols, **STypes;
 int* SVals, *SymbolAddrs;
@@ -30,13 +30,17 @@ char
 *S_op2 = "=&|",
 *S_punct = "(){},;",
 *S_TailCall = "))))",
-*Symbol32 = "&V&FV32",
-*Symbol8 = "&v&Fv8",
-*SymbolPtr32 = "&P&FP32",
-*SymbolPtr8 = "&p&Fp8",
+*Symbol32 = "$V$FV32",
+*Symbol8 = "$v$Fv8",
+*SymbolPtr32 = "$P$FP32",
+*SymbolPtr8 = "$p$Fp8",
 *Lval8addr = "*Ref8",
 *Lval32addr = "*Ref32";
 
+//此函数不参与自举
+int syntax_error(int sym_idx, char *message){
+	return printf("!!!%i : %s\n", sym_idx, message);
+}
 char* skip_line(char *src){
 	if(*src == '\n'){ return src + 1; }
 	return skip_line(src + 1);
@@ -46,10 +50,12 @@ int skip_interparen(int sym_iter, int paren_ctr){
 		return skip_interparen(sym_iter + 1, paren_ctr + 1);
 	}
 	if(**(Symbols + sym_iter) == ')'){
-		//Note: initial parenth NOT SEEN.
+		//注：输入不包含最初的左括号
 		if(paren_ctr == 0){ return sym_iter + 1; }
 		return skip_interparen(sym_iter + 1, paren_ctr - 1);
 	}
+	//表达式结束处返回
+	if(**(Symbols + sym_iter) == ';'){ return sym_iter; }
 	return skip_interparen(sym_iter + 1, paren_ctr);
 }
 int skip_intercurly(int sym_iter, int curly_ctr){
@@ -57,7 +63,7 @@ int skip_intercurly(int sym_iter, int curly_ctr){
 		return skip_intercurly(sym_iter + 1, curly_ctr + 1);
 	}
 	if(**(Symbols + sym_iter) == '}'){
-		//Note: initial curly NOT SEEN.
+		//注：输入不包含最初的花括号
 		if(curly_ctr == 0){ return sym_iter + 1; }
 		return skip_intercurly(sym_iter + 1, curly_ctr - 1);
 	}
@@ -110,7 +116,7 @@ int SymbolsScan(char *src, int SymCtr){
 		return SymbolsScan(atoint(src, (SVals + SymCtr)), SymCtr + 1);
 	}
 	if(*src == '\''){
-		*(STypes + SymCtr) = src;
+		*(STypes + SymCtr) = S_digit;
 		return SymbolsScan(char_literal_scan(src, (SVals + SymCtr)), SymCtr + 1);
 	}
 	if(*src == '"'){
@@ -175,7 +181,7 @@ int keywords_scan(int kw_scan_i){
 	}
 	return keywords_scan(kw_scan_i - 1);
 }
-//NOT FOR COMPILE
+//此函数不参与自举
 int print_symbols(int symbol_id_iter, int num_symbols){
 	if(symbol_id_iter == num_symbols){ return 0; }
 	printf("%c\t%c%c%c\t%i\t%i\t%i\n", **(Symbols + symbol_id_iter), **(STypes + symbol_id_iter),
@@ -184,18 +190,17 @@ int print_symbols(int symbol_id_iter, int num_symbols){
 		*(Stack + *(SymbolAddrs + symbol_id_iter)));
 	return print_symbols(symbol_id_iter + 1, num_symbols);
 }
-//Forward link identifiers
 int object_link(int sym_meet_idx, int sym_pre_iter){
 	if(sym_pre_iter == 0){ return 0; }
-	if(*(*(STypes + sym_pre_iter)) == '&'
+	if(*(*(STypes + sym_pre_iter)) == '$'
 		&& *(SVals + sym_meet_idx) == *(SVals + sym_pre_iter)
 		&& !memcmp(*(Symbols + sym_meet_idx),
 			*(Symbols + sym_pre_iter), *(SVals + sym_meet_idx))){
-		//Link to same identifier preceding 
+		//链接符号地址和类型到前一同名符号
 		*(STypes + sym_meet_idx) = *(STypes + sym_pre_iter);
 		*(SymbolAddrs + sym_meet_idx) = *(SymbolAddrs + sym_pre_iter);
 		return sym_pre_iter;
-	}//Backward search symbol the same identifier
+	}
 	return object_link(sym_meet_idx, sym_pre_iter - 1);
 }
 
@@ -205,13 +210,13 @@ int func_link(int fsym_idx, int fentrance_idx, int sym_pre_iter){
 		fsym_idx = sym_pre_iter;
 		return func_link(fsym_idx, fentrance_idx, sym_pre_iter - 1);
 	}
-	if(*(*(STypes + sym_pre_iter) + SymFunc + 1) == 'F'
+	if(**(STypes + sym_pre_iter) == '$'
 		&& *(SVals + fsym_idx) == *(SVals + sym_pre_iter)
 		&& !memcmp(*(Symbols + fsym_idx),
 			*(Symbols + sym_pre_iter), *(SVals + fsym_idx))){
-		//Link same identifier preceding with current
+		//链接前一同名符号至此
 		*(SymbolAddrs + sym_pre_iter) = fentrance_idx;
-	}//Backward link function identifiers
+	}
 	return func_link(fsym_idx, fentrance_idx, sym_pre_iter - 1);
 }
 int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
@@ -220,7 +225,8 @@ int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
 	if(sym_counter == 0){ return 0; }
 	if(**(Symbols + sym_post_iter) == '{'){
 		if(CurlyCtr == 0 && **(Symbols + sym_post_iter - 1) == ')'){
-			*(Stack + ObjCtr) = sym_post_iter;
+			//函数入口在第一个语句前，不在花括号上
+			*(Stack + ObjCtr) = sym_post_iter + 1;
 			func_link(-1, ObjCtr, sym_post_iter - 1);
 		}
 		return extern_defs_link(sym_post_iter + 1, sym_counter - 1,
@@ -283,30 +289,25 @@ int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
 }
 int main_entrance(int sym_pre_iter){
 	if(sym_pre_iter == 0){ return 0; }
-	if(*(*(STypes + sym_pre_iter) + SymFunc + 1) == 'F'
+	if(**(STypes + sym_pre_iter) == '$'
 		&& *(SVals + sym_pre_iter) == 4
 		&& !memcmp(*(Symbols + sym_pre_iter), "main", 4)){
-		return sym_pre_iter;
+		return *(Stack + *(SymbolAddrs + sym_pre_iter));
 	}
 	return main_entrance(sym_pre_iter - 1);
 }
 int assign_expr(int A);
 int prim_expr(int A){
-	//FIXME: is_assign
-	if(*(STypes + PC) == S_char || *(STypes + PC) == S_digit){
-		//constant
+	if(*(STypes + PC) == S_digit){
 		A = *(SVals + PC);
 		ExprType = Symbol32;
 		PC = PC + 1;
 		return A;
 	}
-	if(*(*(STypes + PC)) == '&'){
-		//identifier, return a reference
+	if(*(*(STypes + PC)) == '$'){
 		if(*(SymbolAddrs + PC) < 0){
-			//Function args
 			A = *(Top + *(SymbolAddrs + PC));
 		} else{
-			//Globals
 			A = *(Stack + *(SymbolAddrs + PC));
 		}
 		ExprType = *(STypes + PC);
@@ -314,22 +315,26 @@ int prim_expr(int A){
 		return A;
 	}
 	if(*(*(STypes + PC)) == '"'){
-		//string-literal
 		A = (int)*(Symbols + PC);
 		ExprType = SymbolPtr8;
 		PC = PC + 1;
 		return A;
 	}
 	if(*(*(Symbols + PC)) == '('){
-		//(expression)
+		//(...)
 		PC = PC + 1;
 		A = assign_expr(A);
 		if(*(*(Symbols + PC)) == ')'){ PC = PC + 1; } else{ ExprType = 0; }
 		return A;
+	}
+	if(*(*(Symbols + PC)) == ')'){
+		//()
+		PC = PC + 1;
+		ExprType = 0;
+		return A;
 	} else{
-		//function-like-keyword
-		//or error
 		ExprType = *(STypes + PC);
+		PC = PC + 1;
 		return A;
 	}
 }
@@ -376,11 +381,12 @@ int builtins_call(char* func_type){
 }
 int compound_statement(int A);
 int tail_call(int A_func_addr){
-	PC = A_func_addr + 1;
-	return compound_statement(0);
+	Returning = 0;
+	PC = A_func_addr;
+	return 0;
 }
 int call_func(int A_func_addr, int *frame, int ret_addr, char *ret_type){
-	PC = A_func_addr + 1;
+	PC = A_func_addr;
 	A_func_addr = compound_statement(0);
 	PC = ret_addr;
 	ExprType = ret_type;
@@ -388,52 +394,47 @@ int call_func(int A_func_addr, int *frame, int ret_addr, char *ret_type){
 	return A_func_addr;
 }
 int postfix_expression(int A, int num_args, char *func_type, char *symbol_return){
-	//FIXME: incorrect, see 6.5.2
-	//TODO: is_assign
-	//function calls
 	symbol_return = *(STypes + PC - 1);
 	A = prim_expr(A);
-	if(ExprType == 0){ return A; }//()-expr
-	if(*(*(Symbols + PC)) == '('){
+	if(ExprType == 0){ return A; }
+	if(**(Symbols + PC) == '('){
 		PC = PC + 1;
 		func_type = ExprType;
 		num_args = argument_expr_list(A, 0);
 		if(*(*(Symbols + PC)) == ')'){
 			PC = PC + 1;
-			if(*(*(Symbols + PC)) == ';' && symbol_return == S_return){
-				//tail-call
+			if(*func_type != '$'){
+				Top = Top - num_args;
+				return builtins_call(func_type);
+			}
+			if(symbol_return == S_return
+				&& *(*(Symbols + PC)) == ';'){
+				//return identifier(...); - 尾递归
 				memmove(Frame, Top - num_args, num_args * 4);
 				Top = Frame + num_args;
 				return tail_call(A);
 			}
-			if(*func_type != '&'){
-				Top = Top - num_args;
-				return builtins_call(func_type);
-			}
 			Frame = Top - num_args;
 			return call_func(A, Frame, PC, func_type);
-		} else{ return 0; }	//error
-	} else{ return A; }	//No func call
+		} else{ return 0; }	//语法错误
+	} else{ return A; }//没有函数调用
 }
-char *get_cast_type(){
-	if(**(Symbols + PC) == ')'){ return ExprType; } else{
+char *get_cast_type(char *obj_type){
+	if(**(Symbols + PC) == ')'){ return obj_type; } else{
 		if(**(Symbols + PC) == '*'){
-			if(ExprType == Symbol8){
-				ExprType = SymbolPtr8;
-			} else{ ExprType = SymbolPtr32; }
+			if(obj_type == Symbol8){
+				obj_type = SymbolPtr8;
+			} else{ obj_type = SymbolPtr32; }
 		}
 	}
 	PC = PC + 1;
-	return get_cast_type();
+	return get_cast_type(obj_type);
 }
 int get_object_ref(int A){
-	if(*(*(STypes + PC)) == '&'){
-		//identifier, return a reference
+	if(**(STypes + PC) == '$'){
 		if(*(SymbolAddrs + PC) < 0){
-			//Function args
 			A = (int)(Top + *(SymbolAddrs + PC));
 		} else{
-			//Globals
 			A = (int)(Stack + *(SymbolAddrs + PC));
 		}
 		ExprType = *(STypes + PC);
@@ -445,11 +446,21 @@ int get_object_ref(int A){
 	return A;
 }
 int unary_cast_expr(char *cast_to_type, int A, int req_ref){
-	//TODO: complete u-c-expr
 	if(**(Symbols + PC) == '('){
-		if(*(STypes + PC + 1) == S_char){
+		PC = PC + 1;
+		if(*(STypes + PC) == S_char){
 			PC = PC + 1;
-			cast_to_type = get_cast_type(S_char);
+			cast_to_type = get_cast_type(Symbol8);
+			if(**(Symbols + PC) == ')'){
+				PC = PC + 1;
+				A = unary_cast_expr(0, 0, 0);
+				ExprType = cast_to_type;
+				return A;
+			} else{}//语法错误
+		}
+		if(*(STypes + PC + 1) == S_int){
+			PC = PC + 1;
+			cast_to_type = get_cast_type(Symbol32);
 			if(**(Symbols + PC) == ')'){
 				PC = PC + 1;
 				A = unary_cast_expr(0, 0, 0);
@@ -457,21 +468,12 @@ int unary_cast_expr(char *cast_to_type, int A, int req_ref){
 				return A;
 			} else{}//error
 		}
-		if(*(STypes + PC + 1) == S_int){
-			PC = PC + 1;
-			cast_to_type = get_cast_type(S_int);
-			if(**(Symbols + PC) == ')'){
-				PC = PC + 1;
-				A = unary_cast_expr(0, 0, 0);
-				ExprType = cast_to_type;
-				return A;
-			} else{}//error
-		} else{}//not cast-expr
 	}
 	if(**(Symbols + PC) == '!'){
 		PC = PC + 1;
+		A = !unary_cast_expr(0, 0, 0);
 		ExprType = Symbol32;
-		return !unary_cast_expr(0, 0, 0);
+		return A;
 	}
 	if(**(Symbols + PC) == '&'){
 		PC = PC + 1;
@@ -511,53 +513,52 @@ int mul_expr(int A_cast){
 	return A_cast;
 }
 int add_expr(int A_add, int A_mul){
-	//FIXME: Pointers
 	if(**(Symbols + PC) == '+'){
 		PC = PC + 1;
 		if(ExprType == SymbolPtr32){
 			//((int*)ptr+1)
 			A_mul = mul_expr(unary_cast_expr(0, 0, 0));
 			ExprType = SymbolPtr32;
-			return add_expr(A_add+4*A_mul, 0);
+			return add_expr(A_add + 4 * A_mul, 0);
 		}
-				if(ExprType == SymbolPtr8){
-			//((char*)ptr+1)
+		if(ExprType == SymbolPtr8){
+	//((char*)ptr+1)
+			A_mul = mul_expr(unary_cast_expr(0, 0, 0));
 			ExprType = SymbolPtr8;
-			return add_expr(A_add+A_mul, 0);
+			return add_expr(A_add + A_mul, 0);
 		}
 		A_mul = mul_expr(unary_cast_expr(0, 0, 0));
 		if(ExprType == SymbolPtr32){
 			//(1+(int*)ptr)
 			ExprType = SymbolPtr32;
-			return add_expr(4*A_add+A_mul, 0);
+			return add_expr(4 * A_add + A_mul, 0);
 		}
 		if(ExprType == SymbolPtr8){
 			//(1+(char*)ptr)
 			ExprType = SymbolPtr8;
-			return add_expr(A_add+A_mul, 0);
+			return add_expr(A_add + A_mul, 0);
 		}
-
-		return add_expr(A_add+A_mul, 0);
+		return add_expr(A_add + A_mul, 0);
 	}
 	if(**(Symbols + PC) == '-'){
 		PC = PC + 1;
-				PC = PC + 1;
 		if(ExprType == SymbolPtr32){
 			//(ptr-1)
 			A_mul = mul_expr(unary_cast_expr(0, 0, 0));
 			ExprType = SymbolPtr32;
-			return add_expr(A_add-4*A_mul, 0);
+			return add_expr(A_add - 4 * A_mul, 0);
 		}
 		if(ExprType == SymbolPtr8){
 			//((char*)ptr-1)
+			A_mul = mul_expr(unary_cast_expr(0, 0, 0));
 			ExprType = SymbolPtr8;
-			return add_expr(A_add-A_mul, 0);
+			return add_expr(A_add - A_mul, 0);
 		}
 		A_mul = mul_expr(unary_cast_expr(0, 0, 0));
 		if(ExprType == SymbolPtr32 || ExprType == SymbolPtr8){
-			//(1-ptr):error
+			//(1-ptr)
 		}
-		return add_expr(A_add-A_mul, 0);
+		return add_expr(A_add - A_mul, 0);
 	}
 	return A_add;
 }
@@ -565,44 +566,50 @@ int rel_expr(int A_add){
 	if(**(Symbols + PC) == '<'){
 		PC = PC + 1;
 		if(*(STypes + PC) == S_op2){
-			return rel_expr(A_add <= add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0));
+			return rel_expr(A_add <= add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0));
 		} else{
-			return rel_expr(A_add < add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0));
+			return rel_expr(A_add < add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0));
 		}
 	}
 	if(**(Symbols + PC) == '>'){
 		PC = PC + 1;
 		if(*(STypes + PC) == S_op2){
-			return rel_expr(A_add >= add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0));
+			return rel_expr(A_add >= add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0));
 		} else{
-			return rel_expr(A_add > add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0));
+			return rel_expr(A_add > add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0));
 		}
 	}
 	if(*(STypes + PC) == S_op2){
-		PC = PC + 1;
 		if(**(Symbols + PC) == '='){
-			return rel_expr(A_add == add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0));
+			PC = PC + 1;
+			return rel_expr(A_add == add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0));
 		} if(**(Symbols + PC) == '!'){
-			return rel_expr(A_add != add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0));
+			PC = PC + 1;
+			return rel_expr(A_add != add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0));
 		}
 	}
 	return A_add;
 }
-int land_expr(int A_rel){
+int landor_expr(int A_rel){
 	if(**(Symbols + PC) == '&' && *(STypes + PC) == S_op2){
 		PC = PC + 1;
-		return land_expr(A_rel && rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0)));
+		if(A_rel){
+			return land_expr(A_rel && rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0)));
+		}
+		PC = skip_interparen(PC, 0);
+		return 0;
+	}
+	if(**(Symbols + PC) == '|' && *(STypes + PC) == S_op2){
+		PC = PC + 1;
+		if(A_rel){
+			PC = skip_interparen(PC, 0);
+		}
+		return lor_expr(A_rel || rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0)));
 	}
 	return A_rel;
 }
-int lor_expr(int A_land){
-	if(**(Symbols + PC) == '|' && *(STypes + PC) == S_op2){
-		PC = PC + 1;
-		return lor_expr(A_land || land_expr(rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0))));
-	}
-	return A_land;
-}
 int assign_expr(int A){
+	//TODO
 	A = unary_cast_expr(0, 0, 1);
 	if(**(Symbols + PC) == '='){
 		//assign
@@ -613,7 +620,6 @@ int assign_expr(int A){
 }
 int statement(int A);
 int compound_statement(int A){
-	//TODO: not tested, consult 6.8
 	Returning = 0;
 	A = statement(A);
 	if(Returning == 1){ return A; }
@@ -625,13 +631,11 @@ int compound_statement(int A){
 }
 int expr_statement(int A){
 	A = assign_expr(A);
-	if(**(Symbols + PC) == ';'){ PC = PC + 1; } else{}//error
+	if(**(Symbols + PC) == ';'){ PC = PC + 1; }
 	return A;
 }
 int statement(int A){
-	//TODO: expr-statement, selection-statement
 	if(*(STypes + PC) == S_return){
-		//FIXME: incorrect
 		PC = PC + 1;
 		Returning = 1;
 		return expr_statement(A);
@@ -648,10 +652,9 @@ int statement(int A){
 		} else{}//error
 		if(**(Symbols + PC) == ')'){ PC = PC + 1; } else{}//error
 		if(**(Symbols + PC) == '{'){ PC = PC + 1; } else{}//error
-		//TODO: for if
 		if(A){ return compound_statement(A); } else{ PC = skip_intercurly(PC, 0); }
 		if(*(STypes + PC) == S_else){
-			PC = PC + 2;//no check {
+			PC = PC + 2;//XXX未检查 '{'
 			return compound_statement(A);
 		}
 	}
@@ -670,21 +673,21 @@ int main(int argc, char** argv){
 	Src = malloc(StackSize);
 	SrcLen = _read(SrcFp, Src, StackSize);
 	*(Src + SrcLen) = 0;
-	//All Tokens
+	//符号
 	Symbols = malloc(StackSize);
-	//Token Type
+	//符号类型
 	STypes = malloc(StackSize);
-	//Token values: numeric for int/char, ptr for "", length for ID
+	//常量符号值，字符常量、标识符长度
 	SVals = malloc(StackSize);
-	//Identifier address relative to Stack
+	//符号地址偏移量（相对于栈）
 	SymbolAddrs = malloc(StackSize);
 	NumSymbols = SymbolsScan(Src, 0);
 	Stack = malloc(StackSize);
 	Top = Stack;
 	Frame = Stack;
-	// Mark keywords in TTypes
+	//标记关键字、内置函数
 	keywords_scan(NumSymbols);
-	//Mark function entrance in Stack[SymbolAddrs], or variable offset in SymbolAddrs
+	//链接符号
 	Top = Top + extern_defs_link(0, NumSymbols, 0, 0, 0, 1, 0);
 	Frame = Top;
 	*Top = argc - 1;
