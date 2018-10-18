@@ -4,38 +4,42 @@
 #include<io.h>
 int StackSize, SymbolsMemSz, SrcFp, SrcLen = 0, NumSymbols = 0, SymFunc = 2;
 char *Src;
-char** Symbols, **STypes;
-int* SVals, *SymbolAddrs;
-int *Stack, *Top, *Frame;
+char** Symbols;
+char** STypes;
+int* SVals;
+int *SymbolAddrs;
+int *Stack;
+int *Top;
+int *Frame;
+int *ObjRef;
 int PC = 0, Returning = 0;
 char *ExprType = 0;
-char
-*S_int = "int....KEYWORD",
-*S_char = "char...KEYWORD",
-*S_if = "if.....KEYWORD",
-*S_else = "else...KEYWORD",
-*S_return = "return.BUILTIN",
-*S_printf = "printf.BUILTIN",
-*S_memcmp = "memcmp.BUILTIN",
-*S_malloc = "malloc.BUILTIN",
-*S_memchr = "memchr.BUILTIN",
-*S_memmove = "memmove.BUILTIN",
-*S_open = "_open..BUILTIN",
-*S_read = "_read..BUILTIN",
-*S_exit = "exit...BUILTIN",
-*S_digit = "0123456789",
-*S_id1st = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
-*S_id = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
-*S_op = "<=>|&+-*/!",
-*S_op2 = "=&|",
-*S_punct = "(){},;",
-*S_TailCall = "))))",
-*Symbol32 = "$V$FV32",
-*Symbol8 = "$v$Fv8",
-*SymbolPtr32 = "$P$FP32",
-*SymbolPtr8 = "$p$Fp8",
-*Lval8addr = "*Ref8",
-*Lval32addr = "*Ref32";
+char *S_int = "int....KEYWORD";
+char *S_char = "char...KEYWORD";
+char *S_if = "if.....KEYWORD";
+char *S_else = "else...KEYWORD";
+char *S_return = "return.BUILTIN";
+char *S_printf = "printf.BUILTIN";
+char *S_memcmp = "memcmp.BUILTIN";
+char *S_malloc = "malloc.BUILTIN";
+char *S_memchr = "memchr.BUILTIN";
+char *S_memmove = "memmove.BUILTIN";
+char *S_open = "_open..BUILTIN";
+char *S_read = "_read..BUILTIN";
+char *S_exit = "exit...BUILTIN";
+char *S_digit = "0123456789";
+char *S_id1st = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+char *S_id = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+char *S_op = "*/+-<=>|&!";
+char *S_op2 = "=&|";
+char *S_punct = "(){},;";
+char *S_TailCall = "))))";
+char*Symbol32 = "$V$FV32";
+char*Symbol8 = "$v$Fv8";
+char*SymbolPtr32 = "$P$FP32";
+char*SymbolPtr8 = "$p$Fp8";
+char*Lval8addr = "*Ref8";
+char*Lval32addr = "*Ref32";
 
 //此函数不参与自举
 int syntax_error(int sym_idx, char *message){
@@ -157,7 +161,7 @@ char* keywords_type(char* kw_ptr, int kw_len){
 	if(!memcmp(S_return, kw_ptr, kw_len)
 		&& kw_len == 6){ return S_return; }
 	if(!memcmp(S_printf, kw_ptr, kw_len)
-		&& kw_len == 6){ return S_memcmp; }
+		&& kw_len == 6){ return S_printf; }
 	if(!memcmp(S_memcmp, kw_ptr, kw_len)
 		&& kw_len == 6){ return S_memcmp; }
 	if(!memcmp(S_malloc, kw_ptr, kw_len)
@@ -222,7 +226,7 @@ int func_link(int fsym_idx, int fentrance_idx, int sym_pre_iter){
 int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
 	int ParenCtr, char* MetObjType, int ObjCtr, int FuncArgCtr){
 	*(SymbolAddrs + sym_post_iter) = 0;
-	if(sym_counter == 0){ return 0; }
+	if(sym_counter == 0){ return ObjCtr; }
 	if(**(Symbols + sym_post_iter) == '{'){
 		if(CurlyCtr == 0 && **(Symbols + sym_post_iter - 1) == ')'){
 			//函数入口在第一个语句前，不在花括号上
@@ -307,8 +311,10 @@ int prim_expr(int A){
 	if(*(*(STypes + PC)) == '$'){
 		if(*(SymbolAddrs + PC) < 0){
 			A = *(Top + *(SymbolAddrs + PC));
+			*ObjRef = (int)(Top + *(SymbolAddrs + PC));
 		} else{
 			A = *(Stack + *(SymbolAddrs + PC));
+			*ObjRef = (int)(Stack + *(SymbolAddrs + PC));
 		}
 		ExprType = *(STypes + PC);
 		PC = PC + 1;
@@ -415,6 +421,9 @@ int postfix_expression(int A, int num_args, char *func_type, char *symbol_return
 				return tail_call(A);
 			}
 			Frame = Top - num_args;
+			if(*(func_type + SymFunc) == 'F'){
+				func_type = func_type - SymFunc;
+			}
 			return call_func(A, Frame, PC, func_type);
 		} else{ return 0; }	//语法错误
 	} else{ return A; }//没有函数调用
@@ -438,14 +447,11 @@ int get_object_ref(int A){
 			A = (int)(Stack + *(SymbolAddrs + PC));
 		}
 		ExprType = *(STypes + PC);
-		if(ExprType == Symbol8){
-			ExprType = SymbolPtr8;
-		} else{ ExprType = SymbolPtr32; }
 		PC = PC + 1;
 	}
 	return A;
 }
-int unary_cast_expr(char *cast_to_type, int A, int req_ref){
+int unary_cast_expr(char *cast_to_type, int A){
 	if(**(Symbols + PC) == '('){
 		PC = PC + 1;
 		if(*(STypes + PC) == S_char){
@@ -453,7 +459,7 @@ int unary_cast_expr(char *cast_to_type, int A, int req_ref){
 			cast_to_type = get_cast_type(Symbol8);
 			if(**(Symbols + PC) == ')'){
 				PC = PC + 1;
-				A = unary_cast_expr(0, 0, 0);
+				A = unary_cast_expr(0, 0);
 				ExprType = cast_to_type;
 				return A;
 			} else{}//语法错误
@@ -463,7 +469,7 @@ int unary_cast_expr(char *cast_to_type, int A, int req_ref){
 			cast_to_type = get_cast_type(Symbol32);
 			if(**(Symbols + PC) == ')'){
 				PC = PC + 1;
-				A = unary_cast_expr(0, 0, 0);
+				A = unary_cast_expr(0, 0);
 				ExprType = cast_to_type;
 				return A;
 			} else{}//error
@@ -471,18 +477,23 @@ int unary_cast_expr(char *cast_to_type, int A, int req_ref){
 	}
 	if(**(Symbols + PC) == '!'){
 		PC = PC + 1;
-		A = !unary_cast_expr(0, 0, 0);
+		A = !unary_cast_expr(0, 0);
 		ExprType = Symbol32;
 		return A;
 	}
 	if(**(Symbols + PC) == '&'){
 		PC = PC + 1;
-		return get_object_ref(A);
+		A = unary_cast_expr(0, 0);
+		A = (int)ObjRef;
+		if(ExprType == Symbol8){
+			ExprType = SymbolPtr8;
+		} else{ ExprType = SymbolPtr32; }
+		return A;
 	}
 	if(**(Symbols + PC) == '*'){
 		PC = PC + 1;
-		A = unary_cast_expr(0, 0, 0);
-		if(req_ref){ return A; }
+		A = unary_cast_expr(0, 0);
+		*ObjRef = A;
 		if(ExprType == SymbolPtr8){
 			ExprType = Symbol8;
 			return *(char*)A;
@@ -496,19 +507,16 @@ int unary_cast_expr(char *cast_to_type, int A, int req_ref){
 			return *(char*)A;
 		} else{}//error
 	}
-	if(req_ref){
-		A = get_object_ref(A);
-	}
 	return postfix_expression(A, 0, 0, 0);
 }
 int mul_expr(int A_cast){
 	if(**(Symbols + PC) == '*'){
 		PC = PC + 1;
-		return mul_expr(A_cast * unary_cast_expr(0, A_cast, 0));
+		return mul_expr(A_cast * unary_cast_expr(0, A_cast));
 	}
 	if(**(Symbols + PC) == '/'){
 		PC = PC + 1;
-		return mul_expr(A_cast / unary_cast_expr(0, A_cast, 0));
+		return mul_expr(A_cast / unary_cast_expr(0, A_cast));
 	}
 	return A_cast;
 }
@@ -517,17 +525,17 @@ int add_expr(int A_add, int A_mul){
 		PC = PC + 1;
 		if(ExprType == SymbolPtr32){
 			//((int*)ptr+1)
-			A_mul = mul_expr(unary_cast_expr(0, 0, 0));
+			A_mul = mul_expr(unary_cast_expr(0, 0));
 			ExprType = SymbolPtr32;
 			return add_expr(A_add + 4 * A_mul, 0);
 		}
 		if(ExprType == SymbolPtr8){
 	//((char*)ptr+1)
-			A_mul = mul_expr(unary_cast_expr(0, 0, 0));
+			A_mul = mul_expr(unary_cast_expr(0, 0));
 			ExprType = SymbolPtr8;
 			return add_expr(A_add + A_mul, 0);
 		}
-		A_mul = mul_expr(unary_cast_expr(0, 0, 0));
+		A_mul = mul_expr(unary_cast_expr(0, 0));
 		if(ExprType == SymbolPtr32){
 			//(1+(int*)ptr)
 			ExprType = SymbolPtr32;
@@ -544,17 +552,17 @@ int add_expr(int A_add, int A_mul){
 		PC = PC + 1;
 		if(ExprType == SymbolPtr32){
 			//(ptr-1)
-			A_mul = mul_expr(unary_cast_expr(0, 0, 0));
+			A_mul = mul_expr(unary_cast_expr(0, 0));
 			ExprType = SymbolPtr32;
 			return add_expr(A_add - 4 * A_mul, 0);
 		}
 		if(ExprType == SymbolPtr8){
 			//((char*)ptr-1)
-			A_mul = mul_expr(unary_cast_expr(0, 0, 0));
+			A_mul = mul_expr(unary_cast_expr(0, 0));
 			ExprType = SymbolPtr8;
 			return add_expr(A_add - A_mul, 0);
 		}
-		A_mul = mul_expr(unary_cast_expr(0, 0, 0));
+		A_mul = mul_expr(unary_cast_expr(0, 0));
 		if(ExprType == SymbolPtr32 || ExprType == SymbolPtr8){
 			//(1-ptr)
 		}
@@ -563,60 +571,66 @@ int add_expr(int A_add, int A_mul){
 	return A_add;
 }
 int rel_expr(int A_add){
+	//非标准（6.5.9）：所有关系运算符和、等于、不等于具有相同运算优先级
 	if(**(Symbols + PC) == '<'){
 		PC = PC + 1;
 		if(*(STypes + PC) == S_op2){
-			return rel_expr(A_add <= add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0));
+			return rel_expr(A_add <= add_expr(mul_expr(unary_cast_expr(0, 0)), 0));
 		} else{
-			return rel_expr(A_add < add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0));
+			return rel_expr(A_add < add_expr(mul_expr(unary_cast_expr(0, 0)), 0));
 		}
 	}
 	if(**(Symbols + PC) == '>'){
 		PC = PC + 1;
 		if(*(STypes + PC) == S_op2){
-			return rel_expr(A_add >= add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0));
+			return rel_expr(A_add >= add_expr(mul_expr(unary_cast_expr(0, 0)), 0));
 		} else{
-			return rel_expr(A_add > add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0));
+			return rel_expr(A_add > add_expr(mul_expr(unary_cast_expr(0, 0)), 0));
 		}
 	}
 	if(*(STypes + PC) == S_op2){
 		if(**(Symbols + PC) == '='){
 			PC = PC + 1;
-			return rel_expr(A_add == add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0));
+			return rel_expr(A_add == add_expr(mul_expr(unary_cast_expr(0, 0)), 0));
 		} if(**(Symbols + PC) == '!'){
 			PC = PC + 1;
-			return rel_expr(A_add != add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0));
+			return rel_expr(A_add != add_expr(mul_expr(unary_cast_expr(0, 0)), 0));
 		}
 	}
 	return A_add;
 }
 int landor_expr(int A_rel){
+	//非标准（6.5.14）：逻辑与（&&）或（||）具有相同优先级
 	if(**(Symbols + PC) == '&' && *(STypes + PC) == S_op2){
 		PC = PC + 1;
 		if(A_rel){
-			return landor_expr(A_rel && rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0)));
-		}
+			return landor_expr(A_rel && rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0)), 0)));
+		}//短路
 		PC = skip_interparen(PC, 0);
 		return 0;
 	}
 	if(**(Symbols + PC) == '|' && *(STypes + PC) == S_op2){
 		PC = PC + 1;
-		if(A_rel){
+		if(A_rel){//短路
 			PC = skip_interparen(PC, 0);
 		}
-		return landor_expr(A_rel || rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0)));
+		return landor_expr(A_rel || rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0)), 0)));
 	}
 	return A_rel;
 }
 int assign_expr(int A){
-	//TODO
-	A = unary_cast_expr(0, 0, 1);
-	if(**(Symbols + PC) == '='){
-		//assign
-	} else{
-		//no assignment
+	//仅支持普通赋值（6.5.16.1）
+	A = unary_cast_expr(0, 0);
+	if(*(STypes + PC) == S_op && **(Symbols + PC) == '='){
+		PC = PC + 1;
+		if(ExprType == Symbol8){
+			*(char*)ObjRef = (char)assign_expr(0);
+		} else{
+			*(int*)ObjRef = assign_expr(0);
+		}
 	}
-	return A;
+	return landor_expr(rel_expr(add_expr(mul_expr(A), 0)));
+		//no assignment
 }
 int statement(int A);
 int compound_statement(int A){
@@ -666,8 +680,8 @@ int statement(int A){
 }
 int main(int argc, char** argv){
 	if(argc < 2){ return(9); }
-	StackSize = 1024 * 1024 * 1;
-	SymbolsMemSz = 1024 * 1024;
+	StackSize = 1024 * 1024 * 10;
+	SymbolsMemSz = 1024 * 128;
 	//_O_RDWR|_O_TEXT
 	SrcFp = _open(*(argv + 1), 16386);
 	Src = malloc(StackSize);
@@ -683,18 +697,19 @@ int main(int argc, char** argv){
 	SymbolAddrs = malloc(StackSize);
 	NumSymbols = SymbolsScan(Src, 0);
 	Stack = malloc(StackSize);
-	Top = Stack;
-	Frame = Stack;
+	//符号引用（指针）
+	ObjRef = malloc(4);
+	Top = Stack+1;
 	//标记关键字、内置函数
 	keywords_scan(NumSymbols);
 	//链接符号
-	Top = Top + extern_defs_link(0, NumSymbols, 0, 0, 0, 1, 0);
+	Top = Top+ extern_defs_link(0, NumSymbols, 0, 0, 0, 0, 0);
 	Frame = Top;
 	*Top = argc - 1;
 	Top = Top + 1;
 	*Top = (int)(argv + 1);
 	Top = Top + 1;
 	PC = main_entrance(NumSymbols - 1);
-	return print_symbols(0, NumSymbols);
-	//return compound_statement(0);
+	//return print_symbols(0, NumSymbols);
+	return compound_statement(0);
 }
