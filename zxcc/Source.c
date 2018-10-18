@@ -594,7 +594,7 @@ int landor_expr(int A_rel){
 	if(**(Symbols + PC) == '&' && *(STypes + PC) == S_op2){
 		PC = PC + 1;
 		if(A_rel){
-			return land_expr(A_rel && rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0)));
+			return landor_expr(A_rel && rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0)));
 		}
 		PC = skip_interparen(PC, 0);
 		return 0;
@@ -604,7 +604,7 @@ int landor_expr(int A_rel){
 		if(A_rel){
 			PC = skip_interparen(PC, 0);
 		}
-		return lor_expr(A_rel || rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0)));
+		return landor_expr(A_rel || rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)), 0)));
 	}
 	return A_rel;
 }
@@ -694,7 +694,7 @@ int main(int argc, char** argv){
 	Top = Top + 1;
 	*Top = (int)(argv + 1);
 	Top = Top + 1;
-	return print_symbols(0, NumSymbols);
 	PC = main_entrance(NumSymbols - 1);
-	return compound_statement(0);
+	return print_symbols(0, NumSymbols);
+	//return compound_statement(0);
 }
