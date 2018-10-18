@@ -372,6 +372,7 @@ int builtins_call(char* func_type){
 	if(func_type == S_exit){
 		exit(*Top);
 	}
+	return 0;
 }
 int compound_statement(int A);
 int tail_call(int A_func_addr){
@@ -553,7 +554,7 @@ int add_expr(int A_add, int A_mul){
 			return add_expr(A_add-A_mul, 0);
 		}
 		A_mul = mul_expr(unary_cast_expr(0, 0, 0));
-		if(ExprType == SymbolPtr32){
+		if(ExprType == SymbolPtr32 || ExprType == SymbolPtr8){
 			//(1-ptr):error
 		}
 		return add_expr(A_add-A_mul, 0);
@@ -597,7 +598,7 @@ int land_expr(int A_rel){
 int lor_expr(int A_land){
 	if(**(Symbols + PC) == '|' && *(STypes + PC) == S_op2){
 		PC = PC + 1;
-		return lor(A_land && land_expr(rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0))));
+		return lor_expr(A_land || land_expr(rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0, 0)),0))));
 	}
 	return A_land;
 }
