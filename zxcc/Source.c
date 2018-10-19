@@ -24,6 +24,7 @@ char *S_memcmp = "memcmp.BUILTIN";
 char *S_malloc = "malloc.BUILTIN";
 char *S_memchr = "memchr.BUILTIN";
 char *S_memmove = "memmove.BUILTIN";
+//TODO: 使用std fopen, fread, fwrite, fclose
 char *S_open = "_open..BUILTIN";
 char *S_read = "_read..BUILTIN";
 char *S_exit = "exit...BUILTIN";
@@ -385,7 +386,7 @@ int builtins_call(char* func_type){
 	}
 	return 0;
 }
-int compound_statement(int A);
+int compound_statement(int A, int curly_ctr);
 int tail_call(int A_func_addr){
 	Returning = 0;
 	PC = A_func_addr;
@@ -393,7 +394,7 @@ int tail_call(int A_func_addr){
 }
 int call_func(int A_func_addr, int *frame, int ret_addr, char *ret_type){
 	PC = A_func_addr;
-	A_func_addr = compound_statement(0);
+	A_func_addr = compound_statement(0, 0);
 	PC = ret_addr;
 	ExprType = ret_type;
 	Top = frame;
@@ -632,31 +633,18 @@ int assign_expr(int A){
 	return landor_expr(rel_expr(add_expr(mul_expr(A), 0)));
 		//no assignment
 }
-int statement(int A);
-int compound_statement(int A){
-	Returning = 0;
-	A = statement(A);
-	if(Returning == 1){ return A; }
-	if(**(Symbols + PC) == '}'){
-		PC = PC + 1;
-		return A;
-	}
-	return compound_statement(A);
-}
 int expr_statement(int A){
 	A = assign_expr(A);
 	if(**(Symbols + PC) == ';'){ PC = PC + 1; }
 	return A;
 }
-int statement(int A){
+int compound_statement(int A, int curly_ctr){
+	if(Returning == 1){ return A; }
+	Returning = 0;
 	if(*(STypes + PC) == S_return){
 		PC = PC + 1;
 		Returning = 1;
-		return expr_statement(A);
-	}
-	if(**(Symbols + PC) == '{'){
-		PC = PC + 1;
-		return compound_statement(A);
+		return compound_statement(expr_statement(A), curly_ctr);
 	}
 	if(*(STypes + PC) == S_if){
 		PC = PC + 1;
@@ -666,17 +654,27 @@ int statement(int A){
 		} else{}//error
 		if(**(Symbols + PC) == ')'){ PC = PC + 1; } else{}//error
 		if(**(Symbols + PC) == '{'){ PC = PC + 1; } else{}//error
-		if(A){ return compound_statement(A); } else{ PC = skip_intercurly(PC, 0); }
+		if(A){ return compound_statement(A, curly_ctr+1); }
+		else{ PC = skip_intercurly(PC, 0); }
 		if(*(STypes + PC) == S_else){
-			PC = PC + 2;//XXX未检查 '{'
-			return compound_statement(A);
+			PC = PC + 1;
+			if(**(Symbols + PC) == '{'){ PC = PC + 1; } else{}
+			return compound_statement(A, curly_ctr+1);
 		}
 	}
 	if(*(STypes + PC) == S_else){
 		PC = skip_intercurly(PC + 2, 0);
-		return A;
+		return compound_statement(A, curly_ctr);
 	}
-	return expr_statement(A);
+	if(**(Symbols + PC) == '{'){
+		PC = PC + 1;
+		return compound_statement(A, curly_ctr + 1);
+	}
+	if(**(Symbols + PC) == '}'){
+		PC = PC + 1;
+		return compound_statement(A, curly_ctr -1);
+	}
+	return compound_statement(expr_statement(A), curly_ctr);
 }
 int main(int argc, char** argv){
 	if(argc < 2){ return(9); }
@@ -711,5 +709,5 @@ int main(int argc, char** argv){
 	Top = Top + 1;
 	PC = main_entrance(NumSymbols - 1);
 	//return print_symbols(0, NumSymbols);
-	return compound_statement(0);
+	return compound_statement(0, 0);
 }
