@@ -12,7 +12,7 @@ int *Stack;
 int *Top;
 int *Frame;
 int *ObjRef;
-int PC = 0, Returning = 0;
+int PC = 0, TailCalling = 0;
 char *ExprType = 0;
 char *S_int = "int....KEYWORD";
 char *S_char = "char...KEYWORD";
@@ -34,13 +34,10 @@ char *S_id = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 char *S_op = "*/+-<=>|&!";
 char *S_op2 = "=&|";
 char *S_punct = "(){},;";
-char *S_TailCall = "))))";
 char*Symbol32 = "$V$FV32";
 char*Symbol8 = "$v$Fv8";
 char*SymbolPtr32 = "$P$FP32";
 char*SymbolPtr8 = "$p$Fp8";
-char*Lval8addr = "*Ref8";
-char*Lval32addr = "*Ref32";
 
 //此函数不参与自举
 int syntax_error(int sym_idx, char *message){
@@ -189,7 +186,7 @@ int keywords_scan(int kw_scan_i){
 //此函数不参与自举
 int print_symbols(int symbol_id_iter, int num_symbols){
 	if(symbol_id_iter == num_symbols){ return 0; }
-	printf("%c\t%c%c%c\t%i\t%i\t%i\n", **(Symbols + symbol_id_iter), **(STypes + symbol_id_iter),
+	printf("[%i]%c\t%c%c%c\t%i\t%i\t%i\n", symbol_id_iter, **(Symbols + symbol_id_iter), **(STypes + symbol_id_iter),
 		*(*(STypes + symbol_id_iter) + 1), *(*(STypes + symbol_id_iter) + 2),
 		*(SVals + symbol_id_iter), *(SymbolAddrs + symbol_id_iter),
 		*(Stack + *(SymbolAddrs + symbol_id_iter)));
@@ -354,7 +351,7 @@ int argument_expr_list(int A, int num_args){
 		PC = PC + 1;
 		return argument_expr_list(A, num_args + 1);
 	}
-	return num_args;
+	return num_args + 1;
 }
 int builtins_call(char* func_type){
 	if(func_type == S_malloc){
@@ -388,12 +385,13 @@ int builtins_call(char* func_type){
 }
 int compound_statement(int A, int curly_ctr);
 int tail_call(int A_func_addr){
-	Returning = 0;
+	TailCalling = 1;
 	PC = A_func_addr;
 	return 0;
 }
 int call_func(int A_func_addr, int *frame, int ret_addr, char *ret_type){
 	PC = A_func_addr;
+	TailCalling = 0;
 	A_func_addr = compound_statement(0, 0);
 	PC = ret_addr;
 	ExprType = ret_type;
@@ -422,12 +420,13 @@ int postfix_expression(int A, int num_args, char *func_type, char *symbol_return
 				return tail_call(A);
 			}
 			Frame = Top - num_args;
-			if(*(func_type + SymFunc) == 'F'){
+			if(*(func_type + 1) == 'F'){
 				func_type = func_type - SymFunc;
 			}
 			return call_func(A, Frame, PC, func_type);
 		} else{ return 0; }	//语法错误
-	} else{ return A; }//没有函数调用
+	}
+	return A;
 }
 char *get_cast_type(char *obj_type){
 	if(**(Symbols + PC) == ')'){ return obj_type; } else{
@@ -453,28 +452,25 @@ int get_object_ref(int A){
 	return A;
 }
 int unary_cast_expr(char *cast_to_type, int A){
-	if(**(Symbols + PC) == '('){
-		PC = PC + 1;
-		if(*(STypes + PC) == S_char){
+	if(**(Symbols + PC) == '(' && *(STypes + PC) == S_char){
+		PC = PC + 2;
+		cast_to_type = get_cast_type(Symbol8);
+		if(**(Symbols + PC) == ')'){
 			PC = PC + 1;
-			cast_to_type = get_cast_type(Symbol8);
-			if(**(Symbols + PC) == ')'){
-				PC = PC + 1;
-				A = unary_cast_expr(0, 0);
-				ExprType = cast_to_type;
-				return A;
-			} else{}//语法错误
-		}
-		if(*(STypes + PC + 1) == S_int){
+			A = unary_cast_expr(0, 0);
+			ExprType = cast_to_type;
+			return A;
+		} else{}//语法错误
+	}
+	if(**(Symbols + PC) == '(' && *(STypes + PC + 1) == S_int){
+		PC = PC + 2;
+		cast_to_type = get_cast_type(Symbol32);
+		if(**(Symbols + PC) == ')'){
 			PC = PC + 1;
-			cast_to_type = get_cast_type(Symbol32);
-			if(**(Symbols + PC) == ')'){
-				PC = PC + 1;
-				A = unary_cast_expr(0, 0);
-				ExprType = cast_to_type;
-				return A;
-			} else{}//error
-		}
+			A = unary_cast_expr(0, 0);
+			ExprType = cast_to_type;
+			return A;
+		} else{}//error
 	}
 	if(**(Symbols + PC) == '!'){
 		PC = PC + 1;
@@ -639,12 +635,14 @@ int expr_statement(int A){
 	return A;
 }
 int compound_statement(int A, int curly_ctr){
-	if(Returning == 1){ return A; }
-	Returning = 0;
 	if(*(STypes + PC) == S_return){
 		PC = PC + 1;
-		Returning = 1;
-		return compound_statement(expr_statement(A), curly_ctr);
+		TailCalling = 0;
+		A = expr_statement(A);
+		if(TailCalling){
+			return compound_statement(A, curly_ctr);
+		}
+		return A;
 	}
 	if(*(STypes + PC) == S_if){
 		PC = PC + 1;
@@ -654,13 +652,12 @@ int compound_statement(int A, int curly_ctr){
 		} else{}//error
 		if(**(Symbols + PC) == ')'){ PC = PC + 1; } else{}//error
 		if(**(Symbols + PC) == '{'){ PC = PC + 1; } else{}//error
-		if(A){ return compound_statement(A, curly_ctr+1); }
-		else{ PC = skip_intercurly(PC, 0); }
+		if(A){ return compound_statement(A, curly_ctr + 1); } else{ PC = skip_intercurly(PC, 0); }
 		if(*(STypes + PC) == S_else){
 			PC = PC + 1;
 			if(**(Symbols + PC) == '{'){ PC = PC + 1; } else{}
-			return compound_statement(A, curly_ctr+1);
-		}
+			return compound_statement(A, curly_ctr + 1);
+		} else{ return compound_statement(A, curly_ctr); }
 	}
 	if(*(STypes + PC) == S_else){
 		PC = skip_intercurly(PC + 2, 0);
@@ -672,7 +669,7 @@ int compound_statement(int A, int curly_ctr){
 	}
 	if(**(Symbols + PC) == '}'){
 		PC = PC + 1;
-		return compound_statement(A, curly_ctr -1);
+		return compound_statement(A, curly_ctr - 1);
 	}
 	return compound_statement(expr_statement(A), curly_ctr);
 }
@@ -697,17 +694,17 @@ int main(int argc, char** argv){
 	Stack = malloc(StackSize);
 	//符号引用（指针）
 	ObjRef = malloc(4);
-	Top = Stack+1;
+	Top = Stack + 1;
 	//标记关键字、内置函数
 	keywords_scan(NumSymbols);
 	//链接符号
-	Top = Top+ extern_defs_link(0, NumSymbols, 0, 0, 0, 0, 0);
+	Top = Top + extern_defs_link(0, NumSymbols, 0, 0, 0, 0, 0);
 	Frame = Top;
 	*Top = argc - 1;
 	Top = Top + 1;
 	*Top = (int)(argv + 1);
 	Top = Top + 1;
 	PC = main_entrance(NumSymbols - 1);
-	//return print_symbols(0, NumSymbols);
+	//print_symbols(0, NumSymbols);
 	return compound_statement(0, 0);
 }

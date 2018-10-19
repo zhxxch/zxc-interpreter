@@ -1,3 +1,11 @@
+int t = 1;
+int f = 0;
+int fac(int b){
+	if(b>1){
+	return b*fac(b-1);
+}
+return 1;
+}
 int main(){
-return(1+2+3+4+5+6+7+8+9);
+return fac(10);
 }
