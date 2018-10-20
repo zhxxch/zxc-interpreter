@@ -1,11 +1,15 @@
-int t = 1;
-int f = 0;
-int fac(int b){
-	if(b>1){
-	return b*fac(b-1);
+char *Str = "ABCDEFGHIJGKLMNOPQRSTUVWXYZ0123456789";
+int to_lower(char *str_in){
+	if(!(*str_in)){return 0;}
+	if(*str_in >= 'A' && *str_in<='Z'){
+		*str_in = *str_in-('A'-'a');	
+	}
+	return to_lower(str_in+1);
 }
-return 1;
-}
+
 int main(){
-return fac(10);
+printf("%s\n", Str);
+to_lower(Str);
+printf("%s\n", Str);
+return 0;
 }
