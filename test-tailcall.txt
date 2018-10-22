@@ -1,0 +1,16 @@
+char *Str = "ABCDEFGHIJGKLMNOPQRSTUVWXYZ0123456789";
+char *Alpha = "ABCDEFGHIJGKLMNOPQRSTUVWXYZ";
+int to_lower(char *str_in){
+	if(!(*str_in)){return 0;}
+	if(memchr(Alpha, *str_in, 26)){
+		*str_in = *str_in-('A'-'a');	
+	}
+	return to_lower(str_in+1);
+}
+
+int main(){
+printf("%s\n", Str);
+to_lower(Str);
+printf("%s\n", Str);
+return 0;
+}

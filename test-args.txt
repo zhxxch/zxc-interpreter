@@ -1,0 +1,5 @@
+int main(int ac, char **av){
+	printf("ac = %i\n", ac);
+	printf("av1 = %s\n", *(av+1));
+return 0;
+}

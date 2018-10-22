@@ -1,4 +1,4 @@
-﻿#include<stdio.h>
+#include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
 int StackSize, SymbolsMemSz, SrcLen = 0, NumSymbols = 0, SymFunc = 2;
@@ -25,7 +25,6 @@ char *S_memcmp = "memcmp.BUILTIN";
 char *S_malloc = "malloc.BUILTIN";
 char *S_memchr = "memchr.BUILTIN";
 char *S_memmove = "memmove.BUILTIN";
-//TODO: 使用std fopen, fread, fwrite, fclose
 char *S_fopen = "fopen..BUILTIN";
 char *S_fread = "fread..BUILTIN";
 char *S_exit = "exit...BUILTIN";
@@ -49,11 +48,11 @@ int skip_interparen(int sym_iter, int paren_ctr){
 		return skip_interparen(sym_iter + 1, paren_ctr + 1);
 	}
 	if(**(Symbols + sym_iter) == ')'){
-		//注：输入不包含最初的左括号
+		//Note: open ( not seen
 		if(paren_ctr == 0){ return sym_iter + 1; }
 		return skip_interparen(sym_iter + 1, paren_ctr - 1);
 	}
-	//表达式结束处返回
+	//return when meet expr end
 	if(**(Symbols + sym_iter) == ';'){ return sym_iter; }
 	return skip_interparen(sym_iter + 1, paren_ctr);
 }
@@ -62,7 +61,7 @@ int skip_intercurly(int sym_iter, int curly_ctr){
 		return skip_intercurly(sym_iter + 1, curly_ctr + 1);
 	}
 	if(**(Symbols + sym_iter) == '}'){
-		//注：输入不包含最初的花括号
+		//Note: open{ not seen
 		if(curly_ctr == 0){ return sym_iter + 1; }
 		return skip_intercurly(sym_iter + 1, curly_ctr - 1);
 	}
@@ -128,8 +127,8 @@ int SymbolsScan(char *src, int SymCtr){
 		*(SVals + SymCtr) = 0;
 		return SymbolsScan(identifier_scan(src, (SVals + SymCtr)), SymCtr + 1);
 	}
-	if(memchr(S_op, *src, 14)){
-		if(memchr(S_op2, *(src + 1), 4)){
+	if(memchr(S_op, *src, 10)){
+		if(memchr(S_op2, *(src + 1), 3)){
 			*(STypes + SymCtr) = S_op2;
 			*(SVals + SymCtr) = 2;
 			return SymbolsScan(src + 2, SymCtr + 1);
@@ -138,7 +137,7 @@ int SymbolsScan(char *src, int SymCtr){
 		*(SVals + SymCtr) = 1;
 		return SymbolsScan(src + 1, SymCtr + 1);
 	}
-	if(memchr(S_punct, *src, 9)){
+	if(memchr(S_punct, *src, 6)){
 		*(STypes + SymCtr) = S_punct;
 		*(SVals + SymCtr) = 1;
 		return SymbolsScan(src + 1, SymCtr + 1);
@@ -153,7 +152,7 @@ char* keywords_type(char* kw_ptr, int kw_len){
 		&& kw_len == 2){ return S_if; }
 	if(!memcmp(S_else, kw_ptr, kw_len)
 		&& kw_len == 4){ return S_else; }
-	//FILE 指针只使用指针本身的值（地址）作字符型指针处理
+	//Note: FILE as char
 	if(!memcmp(S_file, kw_ptr, kw_len)
 		&& kw_len == 4){ return S_char; }
 	if(!memcmp(S_return, kw_ptr, kw_len)
@@ -189,7 +188,7 @@ int object_link(int sym_meet_idx, int sym_pre_iter){
 		&& *(SVals + sym_meet_idx) == *(SVals + sym_pre_iter)
 		&& !memcmp(*(Symbols + sym_meet_idx),
 			*(Symbols + sym_pre_iter), *(SVals + sym_meet_idx))){
-		//链接符号地址和类型到前一同名符号
+		//Link symbols
 		*(STypes + sym_meet_idx) = *(STypes + sym_pre_iter);
 		*(SymbolAddrs + sym_meet_idx) = *(SymbolAddrs + sym_pre_iter);
 		return sym_pre_iter;
@@ -207,7 +206,7 @@ int func_link(int fsym_idx, int fentrance_idx, int sym_pre_iter){
 		&& *(SVals + fsym_idx) == *(SVals + sym_pre_iter)
 		&& !memcmp(*(Symbols + fsym_idx),
 			*(Symbols + sym_pre_iter), *(SVals + fsym_idx))){
-		//链接前一同名符号至此
+		//link function identifier
 		*(SymbolAddrs + sym_pre_iter) = fentrance_idx;
 	}
 	return func_link(fsym_idx, fentrance_idx, sym_pre_iter - 1);
@@ -218,7 +217,7 @@ int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
 	if(sym_counter == 0){ return ObjCtr; }
 	if(**(Symbols + sym_post_iter) == '{'){
 		if(CurlyCtr == 0 && **(Symbols + sym_post_iter - 1) == ')'){
-			//函数入口在第一个语句前，不在花括号上
+			//function entrance after open {
 			*(Stack + ObjCtr) = sym_post_iter + 1;
 			func_link(-1, ObjCtr, sym_post_iter - 1);
 		}
@@ -289,7 +288,7 @@ int main_entrance(int sym_pre_iter){
 	}
 	return main_entrance(sym_pre_iter - 1);
 }
-int assign_expr(int A);
+int assign_expr(int A, int* obj_ref);
 int prim_expr(int A){
 	if(*(STypes + PC) == S_digit){
 		A = *(SVals + PC);
@@ -318,13 +317,12 @@ int prim_expr(int A){
 	if(*(*(Symbols + PC)) == '('){
 		//(...)
 		PC = PC + 1;
-		A = assign_expr(A);
+		A = assign_expr(A, 0);
 		if(*(*(Symbols + PC)) == ')'){ PC = PC + 1; } else{ ExprType = 0; }
 		return A;
 	}
 	if(*(*(Symbols + PC)) == ')'){
 		//()
-		PC = PC + 1;
 		ExprType = 0;
 		return A;
 	} else{
@@ -333,41 +331,50 @@ int prim_expr(int A){
 		return A;
 	}
 }
-int argument_expr_list(int A, int num_args){
-	A = assign_expr(A);
-	if(ExprType == 0){ return num_args; }//()-expr
-	*Top = A;
-	Top = Top + 1;
+int argument_expr_list(int A, int args_ctr){
+	A = assign_expr(A, 0);
+	if(ExprType == 0){
+		return args_ctr;
+	}//()-expr
 	if(*(*(Symbols + PC)) == ','){
 		PC = PC + 1;
-		return argument_expr_list(A, num_args + 1);
 	}
-	return num_args + 1;
+	args_ctr = argument_expr_list(A, args_ctr + 1);
+	*Top = A;
+	Top = Top + 1;
+	return args_ctr;
 }
 int builtins_call(char* func_type){
 	if(func_type == S_malloc){
+		ExprType = SymbolPtr8;
 		return (int)malloc(*Top);
 	}
 	if(func_type == S_memchr){
-		return (int)memchr((char*)*Top,
-			*(Top + 1), *(Top + 2));
+		ExprType = SymbolPtr8;
+		return (int)memchr((char*)*(Top + 2),
+			*(Top + 1), *(Top));
 	}
 	if(func_type == S_memcmp){
-		return memcmp((char*)*Top,
-			(char*)*(Top + 1), *(Top + 2));
+		ExprType = Symbol32;
+		return memcmp((char*)*(Top + 2),
+			(char*)*(Top + 1), *(Top));
 	}
 	if(func_type == S_memmove){
-		return (int)memmove((char*)*Top,
-			(char*)*(Top + 1), *(Top + 2));
+		ExprType = SymbolPtr8;
+		return (int)memmove((char*)*(Top + 2),
+			(char*)*(Top + 1), *(Top));
 	}
 	if(func_type == S_printf){
-		return printf((char*)*Top, *(Top + 1));
+		ExprType = Symbol32;
+		return printf((char*)*(Top + 1), *Top);
 	}
 	if(func_type == S_fopen){
-		return (int)fopen((char*)*Top, (char*)*(Top + 1));
+		ExprType = SymbolPtr8;
+		return (int)fopen((char*)*(Top + 1), (char*)*(Top));
 	}
 	if(func_type == S_fread){
-		return fread((char*)*Top,*(Top + 1), *(Top + 2), (FILE*)*(Top+3));
+		ExprType = Symbol32;
+		return fread((char*)*(Top + 3), *(Top + 2), *(Top + 1), (FILE*)*(Top));
 	}
 	if(func_type == S_exit){
 		exit(*Top);
@@ -401,12 +408,14 @@ int postfix_expression(int A, int num_args, char *func_type, char *symbol_return
 			PC = PC + 1;
 			if(*func_type != '$'){
 				Top = Top - num_args;
-				return builtins_call(func_type);
+				A = builtins_call(func_type);
+				return A;
 			}
 			if(symbol_return == S_return
 				&& *(*(Symbols + PC)) == ';'){
-				//return identifier(...); - 尾递归
-				memmove(Frame, Top - num_args, num_args * 4);
+				//return identifier(...); - tail call
+				Top = Top - num_args;
+				memmove(Frame, Top, num_args * 4);
 				Top = Frame + num_args;
 				return tail_call(A);
 			}
@@ -415,7 +424,7 @@ int postfix_expression(int A, int num_args, char *func_type, char *symbol_return
 				func_type = func_type - SymFunc;
 			}
 			return call_func(A, Frame, PC, func_type);
-		} else{ return 0; }	//语法错误
+		} else{ return 0; }	//syntax error
 	}
 	return A;
 }
@@ -451,7 +460,7 @@ int unary_cast_expr(char *cast_to_type, int A){
 			A = unary_cast_expr(0, 0);
 			ExprType = cast_to_type;
 			return A;
-		} else{}//语法错误
+		} else{}//syntax error
 	}
 	if(**(Symbols + PC) == '(' && *(STypes + PC + 1) == S_int){
 		PC = PC + 2;
@@ -559,7 +568,7 @@ int add_expr(int A_add, int A_mul){
 	return A_add;
 }
 int rel_expr(int A_add){
-	//非标准（6.5.9）：所有关系运算符和、等于、不等于具有相同运算优先级
+	//NON-STANDARD(6.5.9) : <=, == same priority
 	if(**(Symbols + PC) == '<'){
 		if(*(STypes + PC) == S_op2){
 			PC = PC + 1;
@@ -590,40 +599,41 @@ int rel_expr(int A_add){
 	return A_add;
 }
 int landor_expr(int A_rel){
-	//非标准（6.5.14）：逻辑与（&&）或（||）具有相同优先级
+	//NON-STANDARD(6.5.14) : &&, || same priority
 	if(**(Symbols + PC) == '&' && *(STypes + PC) == S_op2){
 		PC = PC + 1;
 		if(A_rel){
 			return landor_expr(A_rel && rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0)), 0)));
-		}//短路
+		}//short-circuit
 		PC = skip_interparen(PC, 0);
 		return 0;
 	}
 	if(**(Symbols + PC) == '|' && *(STypes + PC) == S_op2){
 		PC = PC + 1;
-		if(A_rel){//短路
+		if(A_rel){//short-circuit
 			PC = skip_interparen(PC, 0);
 		}
 		return landor_expr(A_rel || rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0)), 0)));
 	}
 	return A_rel;
 }
-int assign_expr(int A){
-	//仅支持普通赋值（6.5.16.1）
+int assign_expr(int A, int *obj_ref){
+	//only plain assignment (6.5.16.1)
 	A = unary_cast_expr(0, 0);
+	obj_ref = ObjRef;
 	if(*(STypes + PC) == S_op && **(Symbols + PC) == '='){
 		PC = PC + 1;
 		if(ExprType == Symbol8){
-			*(char*)ObjRef = (char)assign_expr(0);
+			*(char*)obj_ref = (char)assign_expr(0, obj_ref);
 		} else{
-			*ObjRef = assign_expr(0);
+			*obj_ref = assign_expr(0, obj_ref);
 		}
 	}
 	return landor_expr(rel_expr(add_expr(mul_expr(A), 0)));
 		//no assignment
 }
 int expr_statement(int A){
-	A = assign_expr(A);
+	A = assign_expr(A, 0);
 	if(**(Symbols + PC) == ';'){ PC = PC + 1; }
 	return A;
 }
@@ -641,7 +651,7 @@ int compound_statement(int A, int curly_ctr){
 		PC = PC + 1;
 		if(**(Symbols + PC) == '('){
 			PC = PC + 1;
-			A = assign_expr(0);
+			A = assign_expr(0, 0);
 		} else{}//error
 		if(**(Symbols + PC) == ')'){ PC = PC + 1; } else{}//error
 		if(**(Symbols + PC) == '{'){ PC = PC + 1; } else{}//error
@@ -666,7 +676,17 @@ int compound_statement(int A, int curly_ctr){
 	}
 	return compound_statement(expr_statement(A), curly_ctr);
 }
-#include"Header.h"
+int print_symbols(int symbol_id_iter, int num_symbols){
+	if(symbol_id_iter == num_symbols){ return printf("%s\n", "<>   <>   <>"); }
+	printf("[%i] ", symbol_id_iter);
+	printf("%c ", **(Symbols + symbol_id_iter));
+	printf("%c ", **(STypes + symbol_id_iter));
+	printf("%c ", *(*(STypes + symbol_id_iter) + 1));
+	printf("%c ", *(*(STypes + symbol_id_iter) + 2));
+	printf("%i ", *(SVals + symbol_id_iter));
+	printf("%i\n", *(SymbolAddrs + symbol_id_iter));
+	return print_symbols(symbol_id_iter + 1, num_symbols);
+}
 int main(int argc, char** argv){
 	if(argc < 2){ return(9); }
 	StackSize = 1024 * 1024 * 10;
@@ -676,27 +696,21 @@ int main(int argc, char** argv){
 	Src = malloc(StackSize);
 	SrcLen = fread(Src, 1, StackSize, SrcFp);
 	*(Src + SrcLen) = 0;
-	//符号
-	Symbols = malloc(StackSize);
-	//符号类型
-	STypes = malloc(StackSize);
-	//常量符号值，字符常量、标识符长度
-	SVals = malloc(StackSize);
-	//符号地址偏移量（相对于栈）
-	SymbolAddrs = malloc(StackSize);
+	Symbols = malloc(SymbolsMemSz);
+	STypes = malloc(SymbolsMemSz);
+	SVals = malloc(SymbolsMemSz);
+	SymbolAddrs = malloc(SymbolsMemSz);
 	NumSymbols = SymbolsScan(Src, 0);
 	Stack = malloc(StackSize);
 	Top = Stack + 1;
-	//标记关键字、内置函数
+	// print_symbols(0, NumSymbols);
 	keywords_scan(NumSymbols);
-	//链接符号
 	Top = Top + extern_defs_link(0, NumSymbols, 0, 0, 0, 0, 0);
 	Frame = Top;
-	*Top = argc - 1;
-	Top = Top + 1;
 	*Top = (int)(argv + 1);
 	Top = Top + 1;
+	*Top = argc - 1;
+	Top = Top + 1;
 	PC = main_entrance(NumSymbols - 1);
-	//print_symbols(0, NumSymbols);
 	return compound_statement(0, 0);
 }
