@@ -417,6 +417,7 @@ int postfix_expression(int A, int num_args, char *func_type, char *symbol_return
 				Top = Top - num_args;
 				memmove(Frame, Top, num_args * 4);
 				Top = Frame + num_args;
+				if(Top[-2]!=5622)printf("tailcall arg1 = %c, arg2 = %i\n", *(char*)Top[-1], Top[-2]);
 				return tail_call(A);
 			}
 			Frame = Top - num_args;
