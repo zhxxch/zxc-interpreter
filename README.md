@@ -1,23 +1,23 @@
 # zxc-interpreter
 
-CÓïÑÔ£¨×Ó¼¯£©½âÊÍÆ÷£º
+Cè¯­è¨€ï¼ˆå­é›†ï¼‰è§£é‡Šå™¨ï¼š
 
-µÚÒ»¸öÃüÁîÐÐ²ÎÊýÊÇ±»½âÊÍC´úÂëµÄÎÄ¼þÃû£¬ÓàÏÂ²ÎÊý×÷Îª±»½âÊÍ³ÌÐòµÄÃüÁîÐÐ²ÎÊý£»·µ»ØÖµÊÇ±»½âÊÍ³ÌÐòµÄ·µ»ØÖµ¡£
+ç¬¬ä¸€ä¸ªå‘½ä»¤è¡Œå‚æ•°æ˜¯è¢«è§£é‡ŠCä»£ç çš„æ–‡ä»¶åï¼Œä½™ä¸‹å‚æ•°ä½œä¸ºè¢«è§£é‡Šç¨‹åºçš„å‘½ä»¤è¡Œå‚æ•°ï¼›è¿”å›žå€¼æ˜¯è¢«è§£é‡Šç¨‹åºçš„è¿”å›žå€¼ã€‚
 
-*´Ë½âÊÍÆ÷¿ÉÒÔ½âÊÍ×ÔÉí£¬Èç£º¡°.\zxcc.exe .\zxcc\zxcc.c test-fac.txt¡±*
+**æ­¤è§£é‡Šå™¨å¯ä»¥è§£é‡Šè‡ªèº«ï¼Œå¦‚ï¼šâ€œ.\zxcc.exe .\zxcc\zxcc.c test-fac.txtâ€**
 
-½öÏÞ32Î»£¨ÒòÎªÊ¹ÓÃint´æ´¢Ö¸Õë£¬¶øMSVCÊ¹ÓÃLLP64£©¡£
+ä»…é™32ä½ï¼ˆå› ä¸ºæ··ç”¨intç±»åž‹å’ŒæŒ‡é’ˆç±»åž‹ï¼‰ã€‚
 
-Ö§³Öint¡¢ char¡¢if¡¢else¡¢return£»
+æ”¯æŒint char if else returnï¼›
 
-printf(arg1, arg2)¡¢fopen¡¢fread¡¢malloc¡¢free¡¢memmove¡¢memchr¡¢exit¡£
+printf(arg1, arg2) fopen fread malloc free memmove memchr exitã€‚
 
-Ã»ÓÐÑ­»·Óï¾ä£¬µ«ÊÇÎ²µÝ¹éÃ»ÓÐ¶îÍâ¿ªÏú£¬¿ÉÒÔÉùÃ÷º¯ÊýÔ­ÐÍ¡£
+æ²¡æœ‰å¾ªçŽ¯è¯­å¥ï¼Œä½†æ˜¯å°¾é€’å½’æ²¡æœ‰é¢å¤–å¼€é”€ï¼Œå¯ä»¥å£°æ˜Žå‡½æ•°åŽŸåž‹ã€‚
 
-#ÖµµÃ×¢ÒâµÄÓëISO-CµÄÇø±ð£º
+# å€¼å¾—æ³¨æ„çš„ä¸ŽISO-Cçš„åŒºåˆ«ï¼š
 
-²»Ö§³Ö for, while, do while, continue, break, switch, case µÈ£»
+ä¸æ”¯æŒ for while do continue break switch case ç­‰ï¼›
 
-if else ±ØÐëÊ¹ÓÃ¸´ºÏÓï¾ä£¨»¨À¨ºÅ£©£»
+if else å¿…é¡»ä½¿ç”¨å¤åˆè¯­å¥ï¼ˆèŠ±æ‹¬å·ï¼‰ï¼›
 
-&&, || ¾ßÓÐÏàÍ¬ÓÅÏÈ¼¶£»<, >, <=, >=, ==, != ¾ßÓÐÏàÍ¬ÓÅÏÈ¼¶¡£
+&& || å…·æœ‰ç›¸åŒä¼˜å…ˆçº§ï¼›< > <= >= == != å…·æœ‰ç›¸åŒä¼˜å…ˆçº§ã€‚
