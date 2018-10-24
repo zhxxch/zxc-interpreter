@@ -1,7 +1,8 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
-int StackSize, SymbolsMemSz, SrcLen = 0, NumSymbols = 0, SymFunc = 2;
+int StackSize, SymbolsMemSz, SrcLen = 0, NumSymbols = 0,
+SymFunc = 2, PC = 0, TailCalling = 0;
 char *Src;
 FILE *SrcFp;
 char** Symbols;
@@ -12,7 +13,6 @@ int *Stack;
 int *Top;
 int *Frame;
 int *ObjRef = 0;
-int PC = 0, TailCalling = 0;
 char *ExprType = 0;
 char *S_int = "int....KEYWORD";
 char *S_char = "char...KEYWORD";
@@ -47,12 +47,10 @@ int skip_interparen(int sym_iter, int paren_ctr){
 	if(**(Symbols + sym_iter) == '('){
 		return skip_interparen(sym_iter + 1, paren_ctr + 1);
 	}
-	if(**(Symbols + sym_iter) == ')'){
-		//Note: open ( not seen
+	if(**(Symbols + sym_iter) == ')'){//Note: open ( not seen
 		if(paren_ctr == 0){ return sym_iter + 1; }
 		return skip_interparen(sym_iter + 1, paren_ctr - 1);
-	}
-	//return when meet expr end
+	}//return when meet expr end
 	if(**(Symbols + sym_iter) == ';'){ return sym_iter; }
 	return skip_interparen(sym_iter + 1, paren_ctr);
 }
@@ -60,8 +58,7 @@ int skip_intercurly(int sym_iter, int curly_ctr){
 	if(**(Symbols + sym_iter) == '{'){
 		return skip_intercurly(sym_iter + 1, curly_ctr + 1);
 	}
-	if(**(Symbols + sym_iter) == '}'){
-		//Note: open{ not seen
+	if(**(Symbols + sym_iter) == '}'){//Note: open{ not seen
 		if(curly_ctr == 0){ return sym_iter + 1; }
 		return skip_intercurly(sym_iter + 1, curly_ctr - 1);
 	}
@@ -86,7 +83,9 @@ char* char_literal_scan(char *src, int *val){
 }
 char* str_literal_scan(char *src_in, char *src_out){
 	if(*src_in == '\\'){
-		if(*(src_in + 1) == 'n'){ *src_out = '\n'; } else{ *src_out = *(src_in + 1); }
+		if(*(src_in + 1) == 'n'){
+			*src_out = '\n';
+		} else{ *src_out = *(src_in + 1); }
 		return str_literal_scan(src_in + 2, src_out + 1);
 	}
 	if(*src_in == '"'){ *src_out = 0; return src_in + 1; }
@@ -111,21 +110,25 @@ int SymbolsScan(char *src, int SymCtr){
 	}
 	if(memchr(S_digit, *src, 10)){
 		*(STypes + SymCtr) = S_digit;
-		return SymbolsScan(atoint(src, (SVals + SymCtr)), SymCtr + 1);
+		return SymbolsScan(
+			atoint(src, (SVals + SymCtr)), SymCtr + 1);
 	}
 	if(*src == '\''){
 		*(STypes + SymCtr) = S_digit;
-		return SymbolsScan(char_literal_scan(src, (SVals + SymCtr)), SymCtr + 1);
+		return SymbolsScan(
+			char_literal_scan(src, (SVals + SymCtr)), SymCtr + 1);
 	}
 	if(*src == '"'){
 		*(STypes + SymCtr) = src;
 		*(SVals + SymCtr) = (int)(src + 1);
-		return SymbolsScan(str_literal_scan(src + 1, src + 1), SymCtr + 1);
+		return SymbolsScan(
+			str_literal_scan(src + 1, src + 1), SymCtr + 1);
 	}
 	if(memchr(S_id1st, *src, 54)){
 		*(STypes + SymCtr) = S_id;
 		*(SVals + SymCtr) = 0;
-		return SymbolsScan(identifier_scan(src, (SVals + SymCtr)), SymCtr + 1);
+		return SymbolsScan(
+			identifier_scan(src, (SVals + SymCtr)), SymCtr + 1);
 	}
 	if(memchr(S_op, *src, 10)){
 		if(memchr(S_op2, *(src + 1), 3)){
@@ -178,7 +181,8 @@ char* keywords_type(char* kw_ptr, int kw_len){
 int keywords_scan(int kw_scan_i){
 	if(kw_scan_i < 0){ return 0; }
 	if(*(STypes + kw_scan_i) == S_id){
-		*(STypes + kw_scan_i) = keywords_type(*(Symbols + kw_scan_i), *(SVals + kw_scan_i));
+		*(STypes + kw_scan_i) = keywords_type(
+			*(Symbols + kw_scan_i), *(SVals + kw_scan_i));
 	}
 	return keywords_scan(kw_scan_i - 1);
 }
@@ -190,7 +194,8 @@ int object_link(int sym_meet_idx, int sym_pre_iter){
 			*(Symbols + sym_pre_iter), *(SVals + sym_meet_idx))){
 		//Link symbols
 		*(STypes + sym_meet_idx) = *(STypes + sym_pre_iter);
-		*(SymbolAddrs + sym_meet_idx) = *(SymbolAddrs + sym_pre_iter);
+		*(SymbolAddrs + sym_meet_idx)
+			= *(SymbolAddrs + sym_pre_iter);
 		return sym_pre_iter;
 	}
 	return object_link(sym_meet_idx, sym_pre_iter - 1);
@@ -198,7 +203,8 @@ int object_link(int sym_meet_idx, int sym_pre_iter){
 
 int func_link(int fsym_idx, int fentrance_idx, int sym_pre_iter){
 	if(sym_pre_iter == 0){ return 0; }
-	if(fsym_idx < 0 && *(SymbolAddrs + sym_pre_iter) == fentrance_idx){
+	if(fsym_idx < 0 && *(SymbolAddrs + sym_pre_iter)
+		== fentrance_idx){
 		fsym_idx = sym_pre_iter;
 		return func_link(fsym_idx, fentrance_idx, sym_pre_iter - 1);
 	}
@@ -211,8 +217,9 @@ int func_link(int fsym_idx, int fentrance_idx, int sym_pre_iter){
 	}
 	return func_link(fsym_idx, fentrance_idx, sym_pre_iter - 1);
 }
-int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
-	int ParenCtr, char* MetObjType, int ObjCtr, int FuncArgCtr){
+int extern_defs_link(int sym_post_iter, int sym_counter,
+	int CurlyCtr, int ParenCtr, char* MetObjType,
+	int ObjCtr, int FuncArgCtr){
 	*(SymbolAddrs + sym_post_iter) = 0;
 	if(sym_counter == 0){ return ObjCtr; }
 	if(**(Symbols + sym_post_iter) == '{'){
@@ -225,7 +232,6 @@ int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
 			CurlyCtr + 1, ParenCtr, MetObjType, ObjCtr, FuncArgCtr);
 	}
 	if(**(Symbols + sym_post_iter) == '}'){
-		//XXX: NumCparn = NumCparn - 1;
 		return extern_defs_link(sym_post_iter + 1, sym_counter - 1,
 			CurlyCtr - 1, ParenCtr, MetObjType, ObjCtr, FuncArgCtr);
 	}
@@ -248,7 +254,9 @@ int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
 			CurlyCtr, ParenCtr, MetObjType, ObjCtr, FuncArgCtr);
 	}
 	if(**(Symbols + sym_post_iter) == '*'){
-		if(MetObjType == Symbol8){ MetObjType = SymbolPtr8; } else{ MetObjType = SymbolPtr32; }
+		if(MetObjType == Symbol8){
+			MetObjType = SymbolPtr8;
+		} else{ MetObjType = SymbolPtr32; }
 		return extern_defs_link(sym_post_iter + 1, sym_counter - 1,
 			CurlyCtr, ParenCtr, MetObjType, ObjCtr, FuncArgCtr);
 	}
@@ -262,7 +270,8 @@ int extern_defs_link(int sym_post_iter, int sym_counter, int CurlyCtr,
 				*(Stack + ObjCtr) = *(SVals + sym_post_iter + 2);
 			} else{
 				if(**(Symbols + sym_post_iter + 1) == '('){
-					*(STypes + sym_post_iter) = MetObjType + SymFunc;
+					*(STypes + sym_post_iter)
+						= MetObjType + SymFunc;
 					*(Stack + ObjCtr) = -1;
 				}
 			}
@@ -314,15 +323,15 @@ int prim_expr(int A){
 		PC = PC + 1;
 		return A;
 	}
-	if(*(*(Symbols + PC)) == '('){
-		//(...)
+	if(*(*(Symbols + PC)) == '('){//(...)
 		PC = PC + 1;
 		A = assign_expr(A, 0);
-		if(*(*(Symbols + PC)) == ')'){ PC = PC + 1; } else{ ExprType = 0; }
+		if(*(*(Symbols + PC)) == ')'){
+			PC = PC + 1;
+		} else{ ExprType = 0; }
 		return A;
 	}
-	if(*(*(Symbols + PC)) == ')'){
-		//()
+	if(*(*(Symbols + PC)) == ')'){//()
 		ExprType = 0;
 		return A;
 	} else{
@@ -333,12 +342,8 @@ int prim_expr(int A){
 }
 int argument_expr_list(int A, int args_ctr){
 	A = assign_expr(A, 0);
-	if(ExprType == 0){
-		return args_ctr;
-	}//()-expr
-	if(*(*(Symbols + PC)) == ','){
-		PC = PC + 1;
-	}
+	if(ExprType == 0){ return args_ctr; }//()-expr
+	if(*(*(Symbols + PC)) == ','){ PC = PC + 1; }
 	args_ctr = argument_expr_list(A, args_ctr + 1);
 	*Top = A;
 	Top = Top + 1;
@@ -350,7 +355,6 @@ int builtins_call(char* func_type){
 		return (int)malloc(*Top);
 	}
 	if(func_type == S_memchr){
-
 		ExprType = SymbolPtr8;
 		return (int)memchr((char*)*(Top + 2),
 			*(Top + 1), *(Top));
@@ -375,11 +379,10 @@ int builtins_call(char* func_type){
 	}
 	if(func_type == S_fread){
 		ExprType = Symbol32;
-		return fread((char*)*(Top + 3), *(Top + 2), *(Top + 1), (FILE*)*(Top));
+		return fread((char*)*(Top + 3),
+			*(Top + 2), *(Top + 1), (FILE*)*(Top));
 	}
-	if(func_type == S_exit){
-		exit(*Top);
-	}
+	if(func_type == S_exit){ exit(*Top); }
 	return 0;
 }
 int compound_statement(int A, int curly_ctr);
@@ -388,7 +391,8 @@ int tail_call(int A_func_addr){
 	PC = A_func_addr;
 	return 0;
 }
-int call_func(int A_func_addr, int *frame, int ret_addr, char *ret_type){
+int call_func(int A_func_addr, int *frame,
+	int ret_addr, char *ret_type){
 	PC = A_func_addr;
 	TailCalling = 0;
 	A_func_addr = compound_statement(0, 0);
@@ -397,7 +401,8 @@ int call_func(int A_func_addr, int *frame, int ret_addr, char *ret_type){
 	Top = frame;
 	return A_func_addr;
 }
-int postfix_expression(int A, int num_args, char *func_type, char *symbol_return){
+int postfix_expression(int A, int num_args,
+	char *func_type, char *symbol_return){
 	symbol_return = *(STypes + PC - 1);
 	A = prim_expr(A);
 	if(ExprType == 0){ return A; }
@@ -444,9 +449,7 @@ int get_object_ref(int A){
 	if(**(STypes + PC) == '$'){
 		if(*(SymbolAddrs + PC) < 0){
 			A = (int)(Top + *(SymbolAddrs + PC));
-		} else{
-			A = (int)(Stack + *(SymbolAddrs + PC));
-		}
+		} else{ A = (int)(Stack + *(SymbolAddrs + PC)); }
 		ExprType = *(STypes + PC);
 		PC = PC + 1;
 	}
@@ -527,26 +530,22 @@ int mul_expr(int A_cast){
 int add_expr(int A_add, int A_mul){
 	if(**(Symbols + PC) == '+'){
 		PC = PC + 1;
-		if(ExprType == SymbolPtr32){
-			//((int*)ptr+1)
+		if(ExprType == SymbolPtr32){//((int*)ptr+1)
 			A_mul = mul_expr(unary_cast_expr(0, 0));
 			ExprType = SymbolPtr32;
 			return add_expr(A_add + 4 * A_mul, 0);
 		}
-		if(ExprType == SymbolPtr8){
-	//((char*)ptr+1)
+		if(ExprType == SymbolPtr8){//((char*)ptr+1)
 			A_mul = mul_expr(unary_cast_expr(0, 0));
 			ExprType = SymbolPtr8;
 			return add_expr(A_add + A_mul, 0);
 		}
 		A_mul = mul_expr(unary_cast_expr(0, 0));
-		if(ExprType == SymbolPtr32){
-			//(1+(int*)ptr)
+		if(ExprType == SymbolPtr32){//(1+(int*)ptr)
 			ExprType = SymbolPtr32;
 			return add_expr(4 * A_add + A_mul, 0);
 		}
-		if(ExprType == SymbolPtr8){
-			//(1+(char*)ptr)
+		if(ExprType == SymbolPtr8){//(1+(char*)ptr)
 			ExprType = SymbolPtr8;
 			return add_expr(A_add + A_mul, 0);
 		}
@@ -554,28 +553,23 @@ int add_expr(int A_add, int A_mul){
 	}
 	if(**(Symbols + PC) == '-'){
 		PC = PC + 1;
-		if(ExprType == SymbolPtr32){
-			//(ptr-1)
+		if(ExprType == SymbolPtr32){//(ptr-1)
 			A_mul = mul_expr(unary_cast_expr(0, 0));
 			ExprType = SymbolPtr32;
 			return add_expr(A_add - 4 * A_mul, 0);
 		}
-		if(ExprType == SymbolPtr8){
-			//((char*)ptr-1)
+		if(ExprType == SymbolPtr8){//((char*)ptr-1)
 			A_mul = mul_expr(unary_cast_expr(0, 0));
 			ExprType = SymbolPtr8;
 			return add_expr(A_add - A_mul, 0);
 		}
 		A_mul = mul_expr(unary_cast_expr(0, 0));
-		if(ExprType == SymbolPtr32 || ExprType == SymbolPtr8){
-			//(1-ptr)
-		}
+		if(ExprType == SymbolPtr32 || ExprType == SymbolPtr8){}//(1-ptr)
 		return add_expr(A_add - A_mul, 0);
 	}
 	return A_add;
 }
-int rel_expr(int A_add){
-	//NON-STANDARD(6.5.9) : <=, == same priority
+int rel_expr(int A_add){//NON-STANDARD(6.5.9): <=, == same priority
 	if(**(Symbols + PC) == '<'){
 		if(*(STypes + PC) == S_op2){
 			PC = PC + 1;
@@ -605,8 +599,7 @@ int rel_expr(int A_add){
 	}
 	return A_add;
 }
-int landor_expr(int A_rel){
-	//NON-STANDARD(6.5.14) : &&, || same priority
+int landor_expr(int A_rel){//NON-STANDARD(6.5.14): &&, || same priority
 	if(**(Symbols + PC) == '&' && *(STypes + PC) == S_op2){
 		PC = PC + 1;
 		if(A_rel){
@@ -617,30 +610,22 @@ int landor_expr(int A_rel){
 	}
 	if(**(Symbols + PC) == '|' && *(STypes + PC) == S_op2){
 		PC = PC + 1;
-		if(A_rel){//short-circuit
-			PC = skip_interparen(PC, 0);
-		}
+		if(A_rel){ PC = skip_interparen(PC, 0); }//short-circuit
 		return landor_expr(A_rel || rel_expr(add_expr(mul_expr(unary_cast_expr(0, 0)), 0)));
 	}
 	return A_rel;
 }
-int assign_expr(int A, int *obj_ref){
-	//only plain assignment (6.5.16.1)
+int assign_expr(int A, int *obj_ref){//only plain assignment (6.5.16.1)
 	A = unary_cast_expr(0, 0);
-	if(TailCalling){
-		return 0;
-	}
+	if(TailCalling){ return 0; }
 	obj_ref = ObjRef;
 	if(*(STypes + PC) == S_op && **(Symbols + PC) == '='){
 		PC = PC + 1;
 		if(ExprType == Symbol8){
 			*(char*)obj_ref = (char)assign_expr(0, obj_ref);
-		} else{
-			*obj_ref = assign_expr(0, obj_ref);
-		}
+		} else{ *obj_ref = assign_expr(0, obj_ref); }
 	}
-	return landor_expr(rel_expr(add_expr(mul_expr(A), 0)));
-		//no assignment
+	return landor_expr(rel_expr(add_expr(mul_expr(A), 0)));//no assignment
 }
 int expr_statement(int A){
 	A = assign_expr(A, 0);
@@ -652,9 +637,7 @@ int compound_statement(int A, int curly_ctr){
 	if(*(STypes + PC) == S_return){
 		PC = PC + 1;
 		A = expr_statement(A);
-		if(TailCalling){
-			return compound_statement(A, curly_ctr);
-		}
+		if(TailCalling){ return compound_statement(A, curly_ctr); }
 		return A;
 	}
 	if(*(STypes + PC) == S_if){
@@ -665,7 +648,9 @@ int compound_statement(int A, int curly_ctr){
 		} else{}//error
 		if(**(Symbols + PC) == ')'){ PC = PC + 1; } else{}//error
 		if(**(Symbols + PC) == '{'){ PC = PC + 1; } else{}//error
-		if(A){ return compound_statement(A, curly_ctr + 1); } else{ PC = skip_intercurly(PC, 0); }
+		if(A){
+			return compound_statement(A, curly_ctr + 1);
+		} else{ PC = skip_intercurly(PC, 0); }
 		if(*(STypes + PC) == S_else){
 			PC = PC + 1;
 			if(**(Symbols + PC) == '{'){ PC = PC + 1; } else{}
@@ -686,23 +671,10 @@ int compound_statement(int A, int curly_ctr){
 	}
 	return compound_statement(expr_statement(A), curly_ctr);
 }
-int print_symbols(int symbol_id_iter, int num_symbols){
-	if(symbol_id_iter == num_symbols){ return printf("%s\n", "<>   <>   <>"); }
-	printf("[%i] ", symbol_id_iter);
-	printf("%c ", **(Symbols + symbol_id_iter));
-	printf("%c", **(STypes + symbol_id_iter));
-	printf("%c", *(*(STypes + symbol_id_iter) + 1));
-	printf("%c ", *(*(STypes + symbol_id_iter) + 2));
-	printf("%i ", *(SVals + symbol_id_iter));
-	printf("%i\n", *(SymbolAddrs + symbol_id_iter));
-	//printf("%i\n", *(Stack+*(SymbolAddrs + symbol_id_iter)));
-	return print_symbols(symbol_id_iter + 1, num_symbols);
-}
 int main(int argc, char** argv){
 	if(argc < 2){ return(9); }
 	StackSize = 1024 * 1024 * 10;
 	SymbolsMemSz = 1024 * 128;
-	//_O_RDWR|_O_TEXT
 	SrcFp = fopen(*(argv + 1), "r");
 	Src = malloc(StackSize);
 	SrcLen = fread(Src, 1, StackSize, SrcFp);
@@ -722,6 +694,5 @@ int main(int argc, char** argv){
 	*Top = argc - 1;
 	Top = Top + 1;
 	PC = main_entrance(NumSymbols - 1);
-	//return print_symbols(0, NumSymbols);
 	return compound_statement(0, 0);
 }
