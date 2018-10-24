@@ -350,6 +350,7 @@ int builtins_call(char* func_type){
 		return (int)malloc(*Top);
 	}
 	if(func_type == S_memchr){
+
 		ExprType = SymbolPtr8;
 		return (int)memchr((char*)*(Top + 2),
 			*(Top + 1), *(Top));
@@ -417,7 +418,6 @@ int postfix_expression(int A, int num_args, char *func_type, char *symbol_return
 				Top = Top - num_args;
 				memmove(Frame, Top, num_args * 4);
 				Top = Frame + num_args;
-				if(Top[-2]!=5622)printf("tailcall arg1 = %c, arg2 = %i\n", *(char*)Top[-1], Top[-2]);
 				return tail_call(A);
 			}
 			Frame = Top - num_args;
@@ -453,7 +453,7 @@ int get_object_ref(int A){
 	return A;
 }
 int unary_cast_expr(char *cast_to_type, int A){
-	if(**(Symbols + PC) == '(' && *(STypes + PC) == S_char){
+	if(**(Symbols + PC) == '(' && *(STypes + PC + 1) == S_char){
 		PC = PC + 2;
 		cast_to_type = get_cast_type(Symbol8);
 		if(**(Symbols + PC) == ')'){
@@ -476,6 +476,12 @@ int unary_cast_expr(char *cast_to_type, int A){
 	if(**(Symbols + PC) == '!'){
 		PC = PC + 1;
 		A = !unary_cast_expr(0, 0);
+		ExprType = Symbol32;
+		return A;
+	}
+	if(**(Symbols + PC) == '-'){
+		PC = PC + 1;
+		A = -unary_cast_expr(0, 0);
 		ExprType = Symbol32;
 		return A;
 	}
@@ -621,6 +627,9 @@ int landor_expr(int A_rel){
 int assign_expr(int A, int *obj_ref){
 	//only plain assignment (6.5.16.1)
 	A = unary_cast_expr(0, 0);
+	if(TailCalling){
+		return 0;
+	}
 	obj_ref = ObjRef;
 	if(*(STypes + PC) == S_op && **(Symbols + PC) == '='){
 		PC = PC + 1;
@@ -639,9 +648,9 @@ int expr_statement(int A){
 	return A;
 }
 int compound_statement(int A, int curly_ctr){
+	TailCalling = 0;
 	if(*(STypes + PC) == S_return){
 		PC = PC + 1;
-		TailCalling = 0;
 		A = expr_statement(A);
 		if(TailCalling){
 			return compound_statement(A, curly_ctr);
@@ -681,11 +690,12 @@ int print_symbols(int symbol_id_iter, int num_symbols){
 	if(symbol_id_iter == num_symbols){ return printf("%s\n", "<>   <>   <>"); }
 	printf("[%i] ", symbol_id_iter);
 	printf("%c ", **(Symbols + symbol_id_iter));
-	printf("%c ", **(STypes + symbol_id_iter));
-	printf("%c ", *(*(STypes + symbol_id_iter) + 1));
+	printf("%c", **(STypes + symbol_id_iter));
+	printf("%c", *(*(STypes + symbol_id_iter) + 1));
 	printf("%c ", *(*(STypes + symbol_id_iter) + 2));
 	printf("%i ", *(SVals + symbol_id_iter));
 	printf("%i\n", *(SymbolAddrs + symbol_id_iter));
+	//printf("%i\n", *(Stack+*(SymbolAddrs + symbol_id_iter)));
 	return print_symbols(symbol_id_iter + 1, num_symbols);
 }
 int main(int argc, char** argv){
@@ -704,7 +714,6 @@ int main(int argc, char** argv){
 	NumSymbols = SymbolsScan(Src, 0);
 	Stack = malloc(StackSize);
 	Top = Stack + 1;
-	// print_symbols(0, NumSymbols);
 	keywords_scan(NumSymbols);
 	Top = Top + extern_defs_link(0, NumSymbols, 0, 0, 0, 0, 0);
 	Frame = Top;
@@ -713,5 +722,6 @@ int main(int argc, char** argv){
 	*Top = argc - 1;
 	Top = Top + 1;
 	PC = main_entrance(NumSymbols - 1);
+	//return print_symbols(0, NumSymbols);
 	return compound_statement(0, 0);
 }
