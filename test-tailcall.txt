@@ -1,5 +1,5 @@
-char *Str = "ABCDEFGHIJGKLMNOPQRSTUVWXYZ0123456789";
-char *Alpha = "ABCDEFGHIJGKLMNOPQRSTUVWXYZ";
+char *Str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+char *Alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 int to_lower(char *str_in){
 	if(!(*str_in)){return 0;}
 	if(memchr(Alpha, *str_in, 26)){
