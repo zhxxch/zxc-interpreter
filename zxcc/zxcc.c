@@ -3,8 +3,8 @@
 #include<string.h>
 int StackSize, SymbolsMemSz, SrcLen = 0, NumSymbols = 0,
 SymFunc = 2, PC = 0, TailCalling = 0;
-char *Src;
 FILE *SrcFp;
+char *Src;
 char** Symbols;
 char** STypes;
 int* SVals;
@@ -14,30 +14,30 @@ int *Top;
 int *Frame;
 int *ObjRef = 0;
 char *ExprType = 0;
-char *S_int = "int....KEYWORD";
-char *S_char = "char...KEYWORD";
-char *S_if = "if.....KEYWORD";
-char *S_else = "else...KEYWORD";
-char *S_file = "FILE...KEYWORD";
-char *S_return = "return.BUILTIN";
-char *S_printf = "printf.BUILTIN";
-char *S_memcmp = "memcmp.BUILTIN";
-char *S_malloc = "malloc.BUILTIN";
-char *S_memchr = "memchr.BUILTIN";
-char *S_memmove = "memmove.BUILTIN";
-char *S_fopen = "fopen..BUILTIN";
-char *S_fread = "fread..BUILTIN";
-char *S_exit = "exit...BUILTIN";
+char *S_int = "int";
+char *S_char = "char";
+char *S_if = "if";
+char *S_else = "else";
+char *S_file = "FILE";
+char *S_return = "return";
+char *S_printf = "printf";
+char *S_memcmp = "memcmp";
+char *S_malloc = "malloc";
+char *S_memchr = "memchr";
+char *S_memmove = "memmove";
+char *S_fopen = "fopen";
+char *S_fread = "fread";
+char *S_exit = "exit";
 char *S_digit = "0123456789";
 char *S_id1st = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 char *S_id = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 char *S_op = "*/+-<=>|&!";
 char *S_op2 = "=&|";
 char *S_punct = "(){},;";
-char*Symbol32 = "$V$FV32";
-char*Symbol8 = "$v$Fv8";
-char*SymbolPtr32 = "$P$FP32";
-char*SymbolPtr8 = "$p$Fp8";
+char *Symbol32 = "$V$FV32";
+char *Symbol8 = "$v$Fv8";
+char *SymbolPtr32 = "$P$FP32";
+char *SymbolPtr8 = "$p$Fp8";
 
 char* skip_line(char *src){
 	if(*src == '\n'){ return src + 1; }
@@ -155,9 +155,8 @@ char* keywords_type(char* kw_ptr, int kw_len){
 		&& kw_len == 2){ return S_if; }
 	if(!memcmp(S_else, kw_ptr, kw_len)
 		&& kw_len == 4){ return S_else; }
-	//Note: FILE as char
 	if(!memcmp(S_file, kw_ptr, kw_len)
-		&& kw_len == 4){ return S_char; }
+		&& kw_len == 4){ return S_char; }//Note: FILE as char
 	if(!memcmp(S_return, kw_ptr, kw_len)
 		&& kw_len == 6){ return S_return; }
 	if(!memcmp(S_printf, kw_ptr, kw_len)
@@ -192,10 +191,9 @@ int object_link(int sym_meet_idx, int sym_pre_iter){
 		&& *(SVals + sym_meet_idx) == *(SVals + sym_pre_iter)
 		&& !memcmp(*(Symbols + sym_meet_idx),
 			*(Symbols + sym_pre_iter), *(SVals + sym_meet_idx))){
-		//Link symbols
 		*(STypes + sym_meet_idx) = *(STypes + sym_pre_iter);
 		*(SymbolAddrs + sym_meet_idx)
-			= *(SymbolAddrs + sym_pre_iter);
+			= *(SymbolAddrs + sym_pre_iter);//Link symbols
 		return sym_pre_iter;
 	}
 	return object_link(sym_meet_idx, sym_pre_iter - 1);
@@ -212,9 +210,8 @@ int func_link(int fsym_idx, int fentrance_idx, int sym_pre_iter){
 		&& *(SVals + fsym_idx) == *(SVals + sym_pre_iter)
 		&& !memcmp(*(Symbols + fsym_idx),
 			*(Symbols + sym_pre_iter), *(SVals + fsym_idx))){
-		//link function identifier
 		*(SymbolAddrs + sym_pre_iter) = fentrance_idx;
-	}
+	}//link function identifier
 	return func_link(fsym_idx, fentrance_idx, sym_pre_iter - 1);
 }
 int extern_defs_link(int sym_post_iter, int sym_counter,
@@ -224,10 +221,9 @@ int extern_defs_link(int sym_post_iter, int sym_counter,
 	if(sym_counter == 0){ return ObjCtr; }
 	if(**(Symbols + sym_post_iter) == '{'){
 		if(CurlyCtr == 0 && **(Symbols + sym_post_iter - 1) == ')'){
-			//function entrance after open {
 			*(Stack + ObjCtr) = sym_post_iter + 1;
 			func_link(-1, ObjCtr, sym_post_iter - 1);
-		}
+		}//function entrance after open {
 		return extern_defs_link(sym_post_iter + 1, sym_counter - 1,
 			CurlyCtr + 1, ParenCtr, MetObjType, ObjCtr, FuncArgCtr);
 	}
@@ -270,8 +266,7 @@ int extern_defs_link(int sym_post_iter, int sym_counter,
 				*(Stack + ObjCtr) = *(SVals + sym_post_iter + 2);
 			} else{
 				if(**(Symbols + sym_post_iter + 1) == '('){
-					*(STypes + sym_post_iter)
-						= MetObjType + SymFunc;
+					*(STypes + sym_post_iter) = MetObjType + SymFunc;
 					*(Stack + ObjCtr) = -1;
 				}
 			}
@@ -280,9 +275,7 @@ int extern_defs_link(int sym_post_iter, int sym_counter,
 				FuncArgCtr = FuncArgCtr - 1;
 				*(SymbolAddrs + sym_post_iter) = FuncArgCtr;
 				*(STypes + sym_post_iter) = MetObjType;
-			} else{
-				object_link(sym_post_iter, sym_post_iter - 1);
-			}
+			} else{ object_link(sym_post_iter, sym_post_iter - 1); }
 		}
 	} else{}
 	return extern_defs_link(sym_post_iter + 1, sym_counter - 1,
@@ -302,8 +295,7 @@ int prim_expr(int A){
 	if(*(STypes + PC) == S_digit){
 		A = *(SVals + PC);
 		ExprType = Symbol32;
-		PC = PC + 1;
-		return A;
+		PC = PC + 1; return A;
 	}
 	if(*(*(STypes + PC)) == '$'){
 		if(*(SymbolAddrs + PC) < 0){
@@ -314,14 +306,12 @@ int prim_expr(int A){
 			ObjRef = (Stack + *(SymbolAddrs + PC));
 		}
 		ExprType = *(STypes + PC);
-		PC = PC + 1;
-		return A;
+		PC = PC + 1; return A;
 	}
 	if(*(*(STypes + PC)) == '"'){
 		A = (int)*(SVals + PC);
 		ExprType = SymbolPtr8;
-		PC = PC + 1;
-		return A;
+		PC = PC + 1; return A;
 	}
 	if(*(*(Symbols + PC)) == '('){//(...)
 		PC = PC + 1;
@@ -332,12 +322,10 @@ int prim_expr(int A){
 		return A;
 	}
 	if(*(*(Symbols + PC)) == ')'){//()
-		ExprType = 0;
-		return A;
+		ExprType = 0; return A;
 	} else{
 		ExprType = *(STypes + PC);
-		PC = PC + 1;
-		return A;
+		PC = PC + 1; return A;
 	}
 }
 int argument_expr_list(int A, int args_ctr){
@@ -350,12 +338,9 @@ int argument_expr_list(int A, int args_ctr){
 	return args_ctr;
 }
 int builtins_call(char* func_type){
-	if(func_type == S_malloc){
-		ExprType = SymbolPtr8;
-		return (int)malloc(*Top);
-	}
+	ExprType = SymbolPtr8;
+	if(func_type == S_malloc){ return (int)malloc(*Top); }
 	if(func_type == S_memchr){
-		ExprType = SymbolPtr8;
 		return (int)memchr((char*)*(Top + 2),
 			*(Top + 1), *(Top));
 	}
@@ -365,7 +350,6 @@ int builtins_call(char* func_type){
 			(char*)*(Top + 1), *(Top));
 	}
 	if(func_type == S_memmove){
-		ExprType = SymbolPtr8;
 		return (int)memmove((char*)*(Top + 2),
 			(char*)*(Top + 1), *(Top));
 	}
@@ -374,7 +358,6 @@ int builtins_call(char* func_type){
 		return printf((char*)*(Top + 1), *Top);
 	}
 	if(func_type == S_fopen){
-		ExprType = SymbolPtr8;
 		return (int)fopen((char*)*(Top + 1), (char*)*(Top));
 	}
 	if(func_type == S_fread){
@@ -386,11 +369,6 @@ int builtins_call(char* func_type){
 	return 0;
 }
 int compound_statement(int A, int curly_ctr);
-int tail_call(int A_func_addr){
-	TailCalling = 1;
-	PC = A_func_addr;
-	return 0;
-}
 int call_func(int A_func_addr, int *frame,
 	int ret_addr, char *ret_type){
 	PC = A_func_addr;
@@ -414,17 +392,16 @@ int postfix_expression(int A, int num_args,
 			PC = PC + 1;
 			if(*func_type != '$'){
 				Top = Top - num_args;
-				A = builtins_call(func_type);
-				return A;
+				return builtins_call(func_type);
 			}
 			if(symbol_return == S_return
 				&& *(*(Symbols + PC)) == ';'){
-				//return identifier(...); - tail call
 				Top = Top - num_args;
 				memmove(Frame, Top, num_args * 4);
 				Top = Frame + num_args;
-				return tail_call(A);
-			}
+				PC = A;
+				return TailCalling = 1;
+			}//return identifier(...); - tail call
 			Frame = Top - num_args;
 			if(*(func_type + 1) == 'F'){
 				func_type = func_type - SymFunc;
@@ -444,16 +421,6 @@ char *get_cast_type(char *obj_type){
 	}
 	PC = PC + 1;
 	return get_cast_type(obj_type);
-}
-int get_object_ref(int A){
-	if(**(STypes + PC) == '$'){
-		if(*(SymbolAddrs + PC) < 0){
-			A = (int)(Top + *(SymbolAddrs + PC));
-		} else{ A = (int)(Stack + *(SymbolAddrs + PC)); }
-		ExprType = *(STypes + PC);
-		PC = PC + 1;
-	}
-	return A;
 }
 int unary_cast_expr(char *cast_to_type, int A){
 	if(**(Symbols + PC) == '(' && *(STypes + PC + 1) == S_char){
@@ -672,7 +639,7 @@ int compound_statement(int A, int curly_ctr){
 	return compound_statement(expr_statement(A), curly_ctr);
 }
 int main(int argc, char** argv){
-	if(argc < 2){ return(9); }
+	if(argc < 2){ return(-1); }
 	StackSize = 1024 * 1024 * 10;
 	SymbolsMemSz = 1024 * 128;
 	SrcFp = fopen(*(argv + 1), "r");
